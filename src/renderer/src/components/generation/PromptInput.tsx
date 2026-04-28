@@ -1,6 +1,6 @@
 // ============================================================
 // Manthan Studio — Floating Prompt Input
-// Google Flow-inspired creative prompt bar
+// Google Flow-inspired creative prompt bar with full generation wiring
 // ============================================================
 
 import { useState, useRef, useCallback } from 'react'
@@ -13,9 +13,10 @@ import {
   X,
   Sparkles,
   Volume2,
-  Film
+  Film,
+  Loader2
 } from 'lucide-react'
-import { useGenerationStore } from '../../stores/generation-store'
+import { useGenerationStore, type GenerationJob } from '../../stores/generation-store'
 import { useProviderStore } from '../../stores/provider-store'
 import { cn } from '../../lib/utils'
 
@@ -28,35 +29,89 @@ export function PromptInput() {
     startFrame, setStartFrame,
     endFrame, setEndFrame,
     panelExpanded, setPanelExpanded,
-    selectedModel
+    selectedModel,
+    addJob, updateJob
   } = useGenerationStore()
 
   const { activeProviderId, providers } = useProviderStore()
   const [isFocused, setIsFocused] = useState(false)
+  const [isGenerating, setIsGenerating] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const activeProvider = providers.find((p) => p.id === activeProviderId)
 
   const handleGenerate = useCallback(async () => {
-    if (!prompt.trim() || !window.manthan) return
+    if (!prompt.trim() || isGenerating) return
+
+    const jobId = `gen-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+    const isImage = activeProviderId === 'google-imagen'
+    const isAudio = activeProviderId === 'google-lyria'
+
+    const job: GenerationJob = {
+      id: jobId,
+      type: isAudio ? 'audio' : isImage ? 'image' : 'video',
+      status: 'generating',
+      prompt: prompt.trim(),
+      provider: activeProviderId || 'google-veo',
+      model: selectedModel,
+      config: { aspectRatio, resolution, enableAudio },
+      progress: 0,
+      startedAt: Date.now()
+    }
+
+    addJob(job)
+    setIsGenerating(true)
+
     try {
-      const params = {
-        prompt: prompt.trim(),
-        model: selectedModel,
-        aspectRatio,
-        resolution,
-        enableAudio,
-        ...(startFrame && { image: startFrame }),
-        ...(endFrame && { lastFrame: endFrame })
+      if (!window.manthan) {
+        // Dev mode — simulate generation
+        setTimeout(() => {
+          updateJob(jobId, { status: 'completed', progress: 100, completedAt: Date.now() })
+          setIsGenerating(false)
+        }, 2000)
+        return
       }
-      if (activeProviderId === 'google-imagen') {
-        await window.manthan.generateImage({ prompt: prompt.trim(), model: selectedModel })
+
+      if (isImage) {
+        const result = await window.manthan.generateImage({ prompt: prompt.trim(), model: selectedModel })
+        updateJob(jobId, {
+          status: 'completed',
+          progress: 100,
+          completedAt: Date.now(),
+          result: result as GenerationJob['result']
+        })
+      } else if (isAudio) {
+        const result = await window.manthan.generateAudio({ prompt: prompt.trim(), model: selectedModel })
+        updateJob(jobId, {
+          status: 'completed',
+          progress: 100,
+          completedAt: Date.now(),
+          result: result as GenerationJob['result']
+        })
       } else {
-        await window.manthan.generateVideo(params)
+        const params = {
+          prompt: prompt.trim(),
+          model: selectedModel,
+          aspectRatio,
+          resolution,
+          enableAudio,
+          ...(startFrame && { image: startFrame }),
+          ...(endFrame && { lastFrame: endFrame })
+        }
+        const operation = await window.manthan.generateVideo(params) as { id: string }
+        // Video uses background polling — update job ID to match the operation
+        updateJob(jobId, { id: operation.id || jobId })
       }
     } catch (error) {
       console.error('Generation failed:', error)
+      updateJob(jobId, {
+        status: 'failed',
+        error: error instanceof Error ? error.message : 'Generation failed',
+        completedAt: Date.now()
+      })
+    } finally {
+      setIsGenerating(false)
     }
-  }, [prompt, selectedModel, aspectRatio, resolution, enableAudio, startFrame, endFrame, activeProviderId])
+  }, [prompt, selectedModel, aspectRatio, resolution, enableAudio, startFrame, endFrame, activeProviderId, isGenerating, addJob, updateJob])
 
   const handleFileUpload = useCallback(async (target: 'start' | 'end') => {
     if (!window.manthan) return
@@ -69,7 +124,7 @@ export function PromptInput() {
   }, [setStartFrame, setEndFrame])
 
   return (
-    <motion.div layout className="absolute bottom-6 left-1/2 -translate-x-1/2 w-full max-w-3xl z-40">
+    <motion.div layout className="absolute bottom-6 left-1/2 -translate-x-1/2 w-full max-w-3xl z-40 px-4">
       <motion.div
         layout
         className={cn(
@@ -87,20 +142,17 @@ export function PromptInput() {
               transition={{ duration: 0.2 }}
               className="px-4 pt-4 overflow-hidden"
             >
-              <div className="flex items-center gap-4 mb-3">
-                {/* Start frame */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.75rem' }}>
                 <FrameSlot label="Start" frame={startFrame} onUpload={() => handleFileUpload('start')} onClear={() => setStartFrame(null)} />
                 {/* Connector */}
-                <div className="flex items-center gap-1 mt-5">
-                  <div className="w-6 h-px bg-border" />
-                  <div className="w-1.5 h-1.5 rounded-full bg-text-muted" />
-                  <div className="w-6 h-px bg-border" />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', marginTop: '1.25rem' }}>
+                  <div style={{ width: '1.5rem', height: '1px', background: 'var(--color-border)' }} />
+                  <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--color-text-muted)' }} />
+                  <div style={{ width: '1.5rem', height: '1px', background: 'var(--color-border)' }} />
                 </div>
-                {/* End frame */}
                 <FrameSlot label="End" frame={endFrame} onUpload={() => handleFileUpload('end')} onClear={() => setEndFrame(null)} />
-                <div className="flex-1" />
-                {/* Model selector */}
-                <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-bg-elevated border border-border-subtle text-xs text-text-secondary hover:bg-bg-hover transition-all">
+                <div style={{ flex: 1 }} />
+                <button className="inline-flex items-center gap-1.5 rounded-lg bg-bg-elevated border border-border-subtle text-xs text-text-secondary hover:bg-bg-hover transition-all" style={{ padding: '0.375rem 0.75rem' }}>
                   <Film className="w-3.5 h-3.5" />
                   <span>{activeProvider?.name || 'Select model'}</span>
                   <ChevronDown className="w-3 h-3" />
@@ -111,15 +163,11 @@ export function PromptInput() {
         </AnimatePresence>
 
         {/* Main prompt row */}
-        <div className="flex items-center gap-3 px-4 py-3">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem' }}>
           <button
             onClick={() => setPanelExpanded(!panelExpanded)}
-            className={cn(
-              'w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0',
-              'bg-bg-elevated border border-border-subtle',
-              'hover:bg-bg-hover hover:border-border transition-all',
-              'text-text-muted hover:text-text-secondary'
-            )}
+            className="rounded-full bg-bg-elevated border border-border-subtle hover:bg-bg-hover hover:border-border text-text-muted hover:text-text-secondary transition-all"
+            style={{ width: '2.5rem', height: '2.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
           >
             <Plus className={cn('w-5 h-5 transition-transform', panelExpanded && 'rotate-45')} />
           </button>
@@ -135,35 +183,38 @@ export function PromptInput() {
             }}
             placeholder="Describe your vision or upload a starting frame..."
             rows={1}
-            className="flex-1 bg-transparent border-none outline-none resize-none text-sm text-text-primary placeholder:text-text-muted min-h-[24px] max-h-[120px] leading-relaxed"
+            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', resize: 'none', fontSize: '0.875rem', color: 'var(--color-text-primary)', minHeight: '24px', maxHeight: '120px', lineHeight: 1.6 }}
           />
 
           <button
             onClick={handleGenerate}
-            disabled={!prompt.trim()}
-            className={cn(
-              'w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all',
-              prompt.trim()
-                ? 'bg-white text-black hover:bg-gray-100 shadow-md hover:shadow-lg hover:scale-105'
-                : 'bg-bg-elevated text-text-muted cursor-not-allowed'
-            )}
+            disabled={!prompt.trim() || isGenerating}
+            className={cn('rounded-full transition-all', isGenerating && 'animate-pulse')}
+            style={{
+              width: '2.5rem', height: '2.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              background: prompt.trim() ? 'white' : 'var(--color-bg-elevated)',
+              color: prompt.trim() ? 'black' : 'var(--color-text-muted)',
+              cursor: !prompt.trim() || isGenerating ? 'not-allowed' : 'pointer',
+              boxShadow: prompt.trim() ? '0 4px 16px rgba(0,0,0,0.3)' : 'none'
+            }}
           >
-            <ArrowRight className="w-5 h-5" />
+            {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowRight className="w-5 h-5" />}
           </button>
         </div>
 
         {/* Bottom settings pills */}
-        <div className="flex items-center gap-2 px-4 pb-3">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0 1rem 0.75rem' }}>
           {(['16:9', '9:16'] as const).map((ratio) => (
             <button
               key={ratio}
               onClick={() => setAspectRatio(ratio)}
               className={cn(
-                'px-2.5 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wider transition-all',
+                'rounded-md text-[10px] font-semibold uppercase tracking-wider transition-all',
                 aspectRatio === ratio
                   ? 'bg-accent-soft text-accent border border-accent/20'
                   : 'text-text-muted hover:text-text-secondary hover:bg-bg-hover'
               )}
+              style={{ padding: '0.25rem 0.625rem' }}
             >
               {ratio === '16:9' ? '16:9 Cinematic' : '9:16 Portrait'}
             </button>
@@ -173,21 +224,26 @@ export function PromptInput() {
               const r: Array<'720p' | '1080p' | '4k'> = ['720p', '1080p', '4k']
               setResolution(r[(r.indexOf(resolution) + 1) % r.length])
             }}
-            className="px-2.5 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wider text-text-muted hover:text-text-secondary hover:bg-bg-hover transition-all"
+            className="rounded-md text-[10px] font-semibold uppercase tracking-wider text-text-muted hover:text-text-secondary hover:bg-bg-hover transition-all"
+            style={{ padding: '0.25rem 0.625rem' }}
           >
             {resolution.toUpperCase()} Output
           </button>
           <button
             onClick={() => setEnableAudio(!enableAudio)}
             className={cn(
-              'flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wider transition-all',
+              'inline-flex items-center gap-1 rounded-md text-[10px] font-semibold uppercase tracking-wider transition-all',
               enableAudio ? 'text-accent bg-accent-soft border border-accent/20' : 'text-text-muted hover:text-text-secondary hover:bg-bg-hover'
             )}
+            style={{ padding: '0.25rem 0.625rem' }}
           >
             <Volume2 className="w-3 h-3" /> Audio
           </button>
-          <div className="flex-1" />
-          <button className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-medium text-accent hover:bg-accent-soft transition-all">
+          <div style={{ flex: 1 }} />
+          <button
+            className="inline-flex items-center gap-1 rounded-md text-[10px] font-medium text-accent hover:bg-accent-soft transition-all"
+            style={{ padding: '0.25rem 0.625rem' }}
+          >
             <Sparkles className="w-3 h-3" /> Enhance
           </button>
         </div>
@@ -203,19 +259,24 @@ function FrameSlot({ label, frame, onUpload, onClear }: {
   onClear: () => void
 }) {
   return (
-    <div className="flex flex-col gap-1">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
       <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">{label}</span>
       <button
         onClick={onUpload}
         className={cn(
-          'w-16 h-16 rounded-xl border-2 border-dashed flex items-center justify-center transition-all',
+          'rounded-xl border-2 border-dashed transition-all',
           frame ? 'border-accent/30 bg-accent-soft' : 'border-border hover:border-border-focus hover:bg-bg-hover'
         )}
+        style={{ width: '4rem', height: '4rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       >
         {frame ? (
-          <div className="relative w-full h-full">
-            <img src={`data:${frame.mimeType};base64,${frame.data}`} alt={label} className="w-full h-full object-cover rounded-[10px]" />
-            <button onClick={(e) => { e.stopPropagation(); onClear() }} className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-bg-elevated border border-border flex items-center justify-center">
+          <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+            <img src={`data:${frame.mimeType};base64,${frame.data}`} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '10px' }} />
+            <button
+              onClick={(e) => { e.stopPropagation(); onClear() }}
+              className="bg-bg-elevated border border-border"
+              style={{ position: 'absolute', top: '-4px', right: '-4px', width: '16px', height: '16px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
               <X className="w-2.5 h-2.5 text-text-muted" />
             </button>
           </div>

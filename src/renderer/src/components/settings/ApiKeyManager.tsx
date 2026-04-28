@@ -20,6 +20,11 @@ const providerMeta: Record<string, { description: string; icon: React.ReactNode;
     description: 'Image generation with Nano Banana. Text-to-image and image editing.',
     icon: <ImageIcon className="w-5 h-5" />,
     color: 'from-amber-500 to-orange-400'
+  },
+  'google-lyria': {
+    description: 'Audio generation with Lyria 3. Text-to-audio and music creation.',
+    icon: <Music className="w-5 h-5" />,
+    color: 'from-emerald-500 to-teal-400'
   }
 }
 

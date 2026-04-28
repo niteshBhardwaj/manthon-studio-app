@@ -6,6 +6,7 @@
 import { MediaProvider, ConnectionStatus } from './base'
 import { GoogleVeoProvider } from './google-veo'
 import { GoogleImagenProvider } from './google-imagen'
+import { GoogleLyriaProvider } from './google-lyria'
 
 class ProviderRegistry {
   private providers: Map<string, MediaProvider> = new Map()
@@ -15,6 +16,7 @@ class ProviderRegistry {
     // Register built-in providers
     this.register(new GoogleVeoProvider())
     this.register(new GoogleImagenProvider())
+    this.register(new GoogleLyriaProvider())
   }
 
   register(provider: MediaProvider): void {

@@ -29,6 +29,8 @@ const manthanAPI = {
     ipcRenderer.invoke('gen:video', params),
   generateImage: (params: Record<string, unknown>) =>
     ipcRenderer.invoke('gen:image', params),
+  generateAudio: (params: Record<string, unknown>) =>
+    ipcRenderer.invoke('gen:audio', params),
   pollOperation: (opId: string) => ipcRenderer.invoke('gen:poll', opId),
   cancelOperation: (opId: string) => ipcRenderer.invoke('gen:cancel', opId),
 

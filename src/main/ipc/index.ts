@@ -10,7 +10,7 @@ import { app } from 'electron'
 import { providerRegistry } from '../providers/registry'
 import { keyStore } from '../store/key-store'
 import { appStore } from '../store/app-store'
-import { VideoGenParams, ImageGenParams } from '../providers/base'
+import { VideoGenParams, ImageGenParams, AudioGenParams } from '../providers/base'
 
 export function registerIpcHandlers(): void {
   // ── API Key Management ──────────────────────────────────
@@ -101,6 +101,15 @@ export function registerIpcHandlers(): void {
     if (!provider.generateImage) throw new Error('Provider does not support image generation')
 
     const result = await provider.generateImage(params)
+    return result
+  })
+
+  ipcMain.handle('gen:audio', async (_event, params: AudioGenParams) => {
+    const provider = providerRegistry.get('google-lyria')
+    if (!provider) throw new Error('Audio provider not found')
+    if (!provider.generateAudio) throw new Error('Provider does not support audio generation')
+
+    const result = await provider.generateAudio(params)
     return result
   })
 
