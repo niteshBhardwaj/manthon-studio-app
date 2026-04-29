@@ -61,49 +61,56 @@ function EmptyState() {
     // CSS Grid centering avoids flex shrink-to-fit that caused word-by-word text wrapping
     <div style={{ display: 'grid', placeItems: 'center', height: '100%', paddingBottom: '8rem' }}>
       <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.1 }}
+        initial={{ opacity: 0, scale: 0.95, y: 12 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 300, damping: 30 }}
         style={{ textAlign: 'center', width: '100%', maxWidth: '42rem', padding: '0 2rem' }}
       >
         {/* Animated icon */}
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem' }}>
           <motion.div
-            animate={{ rotate: [0, 5, -5, 0] }}
+            animate={{ 
+              rotate: [0, 5, -5, 0],
+              boxShadow: ["0 0 0px oklch(0.7 0.18 250 / 0)", "0 0 20px oklch(0.7 0.18 250 / 0.3)", "0 0 0px oklch(0.7 0.18 250 / 0)"]
+            }}
             transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-            className="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent/20 to-purple-500/20 border border-accent/10 flex items-center justify-center"
+            className="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent/20 to-purple-500/20 border border-accent/20 flex items-center justify-center relative overflow-hidden"
           >
-            <Wand2 className="w-7 h-7 text-accent" />
+            <div className="absolute inset-0 bg-accent/10 blur-xl rounded-full" />
+            <Wand2 className="w-7 h-7 text-accent relative z-10" />
           </motion.div>
         </div>
 
-        <h2 className="text-lg font-semibold text-text-primary" style={{ marginBottom: '0.5rem' }}>
+        <h2 className="text-xl font-semibold text-text-primary tracking-tight" style={{ marginBottom: '0.75rem' }}>
           Start Creating
         </h2>
-        <p className="text-sm text-text-muted" style={{ lineHeight: 1.7, marginBottom: '2rem', maxWidth: '24rem', marginLeft: 'auto', marginRight: 'auto' }}>
+        <p className="text-sm text-text-muted/90" style={{ lineHeight: 1.6, marginBottom: '2.5rem', maxWidth: '24rem', marginLeft: 'auto', marginRight: 'auto' }}>
           Describe your vision below to generate videos, images, and audio with AI.
           Upload frames for precise control.
         </p>
 
-        {/* Feature pills — clickable to select generation type */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
+        {/* Feature pills — interactive motion cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {[
             { icon: Video, label: 'Text → Video', desc: 'Veo 3.1', providerId: 'google-veo' },
-            { icon: ImageIcon, label: 'Text → Image', desc: 'Nano Banana', providerId: 'google-imagen' },
+            { icon: ImageIcon, label: 'Text → Image', desc: 'Imagen 3', providerId: 'google-imagen' },
             { icon: Music, label: 'AI Audio', desc: 'Lyria 3', providerId: 'google-lyria' }
           ].map(({ icon: Icon, label, desc, providerId }) => (
-            <button
+            <motion.button
               key={label}
               onClick={() => handleSelectType(providerId)}
-              className="inline-flex items-center gap-2 rounded-xl bg-bg-elevated/50 border border-border-subtle text-text-secondary hover:border-accent/30 hover:bg-accent/5 transition-all cursor-pointer"
-              style={{ padding: '0.625rem 1rem' }}
+              whileHover={{ scale: 1.03, y: -2 }}
+              whileTap={{ scale: 0.97 }}
+              className="flex flex-col items-center gap-2 rounded-xl bg-bg-elevated/40 border border-border-subtle p-4 text-text-secondary hover:border-accent/40 hover:bg-accent/5 hover:text-text-primary transition-colors cursor-pointer group"
             >
-              <Icon className="w-4 h-4 text-text-muted" style={{ flexShrink: 0 }} />
-              <div style={{ textAlign: 'left' }}>
-                <div className="text-xs font-medium" style={{ whiteSpace: 'nowrap' }}>{label}</div>
-                <div className="text-text-muted" style={{ fontSize: '10px', whiteSpace: 'nowrap' }}>{desc}</div>
+              <div className="p-2 rounded-lg bg-bg-secondary/50 group-hover:bg-accent/10 transition-colors">
+                <Icon className="w-5 h-5 text-text-muted group-hover:text-accent transition-colors" />
               </div>
-            </button>
+              <div style={{ textAlign: 'center' }}>
+                <div className="text-sm font-medium">{label}</div>
+                <div className="text-xs text-text-muted mt-0.5">{desc}</div>
+              </div>
+            </motion.button>
           ))}
         </div>
       </motion.div>

@@ -151,7 +151,7 @@ export class GoogleVeoProvider implements MediaProvider {
 
       // Start the generation
       const rawOperation = await this.client.models.generateVideos(
-        requestParams as Parameters<typeof this.client.models.generateVideos>[0]
+        requestParams as unknown as Parameters<typeof this.client.models.generateVideos>[0]
       )
 
       // Store the raw operation for polling

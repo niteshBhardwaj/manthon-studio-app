@@ -47,6 +47,7 @@ interface ManthanAPI {
   // Generation
   generateVideo: (params: Record<string, unknown>) => Promise<Record<string, unknown>>
   generateImage: (params: Record<string, unknown>) => Promise<Record<string, unknown>>
+  generateAudio: (params: Record<string, unknown>) => Promise<Record<string, unknown>>
   pollOperation: (opId: string) => Promise<Record<string, unknown>>
   cancelOperation: (opId: string) => Promise<{ success: boolean }>
 

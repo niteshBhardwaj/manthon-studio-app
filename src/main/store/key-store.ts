@@ -6,7 +6,7 @@
 import { safeStorage } from 'electron'
 import { JsonStore } from './json-store'
 
-interface KeyStoreSchema {
+interface KeyStoreSchema extends Record<string, unknown> {
   apiKeys: Record<string, string>
   activeProvider: string | null
 }

@@ -97,13 +97,15 @@ export function TemplateSelector() {
             key={template.id}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.05 }}
+            whileHover={{ scale: 1.02, y: -2 }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ type: "spring", stiffness: 300, damping: 25, delay: i * 0.05 }}
             onClick={() => handleSelectTemplate(template)}
             className={cn(
               'group text-left p-4 rounded-xl border border-border-subtle',
               'bg-gradient-to-br', template.gradient,
-              'hover:border-border hover:shadow-md',
-              'transition-all duration-200 cursor-pointer'
+              'hover:border-accent/40 hover:shadow-lg',
+              'transition-colors duration-200 cursor-pointer'
             )}
           >
             <div className="flex items-center gap-2.5 mb-2.5">

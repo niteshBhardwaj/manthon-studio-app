@@ -6,7 +6,7 @@
 import { JsonStore } from './json-store'
 import { GenerationOperation } from '../providers/base'
 
-interface AppStoreSchema {
+interface AppStoreSchema extends Record<string, unknown> {
   history: GenerationOperation[]
   preferences: {
     theme: 'dark' | 'light'

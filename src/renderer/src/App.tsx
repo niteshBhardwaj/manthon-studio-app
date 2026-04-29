@@ -45,6 +45,7 @@ function App() {
         unsubComplete()
       }
     }
+    return undefined
   }, [fetchProviders, addJob, updateJob])
 
   return <AppShell />

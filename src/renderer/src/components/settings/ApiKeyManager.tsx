@@ -1,14 +1,13 @@
 // ============================================================
 // Manthan Studio — API Key Manager
-// Settings panel for managing provider API keys
-// ============================================================
-
 import { useState } from 'react'
-import { motion } from 'framer-motion'
-import { X, Eye, EyeOff, Check, Loader2, AlertCircle, Video, Image as ImageIcon, Music } from 'lucide-react'
+import { Eye, EyeOff, Check, Loader2, AlertCircle, Video, Image as ImageIcon, Music } from 'lucide-react'
 import { useAppStore } from '../../stores/app-store'
 import { useProviderStore } from '../../stores/provider-store'
 import { cn } from '../../lib/utils'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog'
+import { Input } from '../ui/input'
+import { Button } from '../ui/button'
 
 const providerMeta: Record<string, { description: string; icon: React.ReactNode; color: string }> = {
   'google-veo': {
@@ -33,34 +32,13 @@ export function ApiKeyManager() {
   const { providers, updateProviderStatus, fetchProviders } = useProviderStore()
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-      onClick={closeModal}
-    >
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 8 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        transition={{ duration: 0.2 }}
-        className="w-full max-w-lg glass-strong rounded-2xl shadow-float overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Dialog open={true} onOpenChange={(open) => { if (!open) closeModal() }}>
+      <DialogContent className="max-w-xl p-0 gap-0 border-border-subtle bg-bg-secondary shadow-float sm:rounded-2xl glass-strong">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border-subtle">
-          <div>
-            <h2 className="text-sm font-semibold text-text-primary">API Keys</h2>
-            <p className="text-xs text-text-muted mt-0.5">Manage your provider API keys</p>
-          </div>
-          <button
-            onClick={closeModal}
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-text-muted hover:text-text-secondary hover:bg-bg-hover transition-all"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+        <DialogHeader className="px-6 py-4 border-b border-border-subtle">
+          <DialogTitle className="text-sm font-semibold text-text-primary">API Keys</DialogTitle>
+          <DialogDescription className="text-xs text-text-muted mt-0.5">Manage your provider API keys</DialogDescription>
+        </DialogHeader>
 
         {/* Provider list */}
         <div className="p-4 space-y-3 max-h-[60vh] overflow-y-auto">
@@ -81,8 +59,8 @@ export function ApiKeyManager() {
             API keys are encrypted and stored locally on your device. They are never sent to any server other than the provider's API.
           </p>
         </div>
-      </motion.div>
-    </motion.div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -158,36 +136,40 @@ function ProviderKeyCard({
         {/* Key input */}
         <div className="flex gap-2">
           <div className="relative flex-1">
-            <input
+            <Input
               type={showKey ? 'text' : 'password'}
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder={provider.initialized ? '••••••••••••••••' : 'Enter API key...'}
-              className="w-full h-8 px-3 pr-8 text-xs rounded-lg bg-bg-input border border-border-subtle text-text-primary placeholder:text-text-muted focus:border-border-focus focus:outline-none transition-all"
+              className="w-full h-9 px-3 pr-8 text-xs rounded-lg bg-bg-input border border-border-subtle text-text-primary placeholder:text-text-muted transition-all"
             />
             <button
               onClick={() => setShowKey(!showKey)}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary"
             >
-              {showKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           </div>
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={handleTest}
             disabled={!apiKey.trim() || testing}
-            className="h-8 px-3 rounded-lg text-xs font-medium border border-border-subtle bg-bg-elevated text-text-secondary hover:bg-bg-hover disabled:opacity-40 transition-all flex items-center gap-1.5"
+            className="h-9 px-3 text-xs flex items-center gap-1.5"
           >
             {testing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
             Test
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="default"
+            size="sm"
             onClick={handleSave}
             disabled={!apiKey.trim() || saving}
-            className="h-8 px-3 rounded-lg text-xs font-medium bg-accent text-white hover:bg-accent-hover disabled:opacity-40 transition-all flex items-center gap-1.5"
+            className="h-9 px-3 text-xs flex items-center gap-1.5"
           >
             {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
             Save
-          </button>
+          </Button>
         </div>
       </div>
     </div>

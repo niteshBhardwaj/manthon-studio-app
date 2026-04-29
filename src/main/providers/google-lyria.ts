@@ -36,10 +36,8 @@ export class GoogleLyriaProvider implements MediaProvider {
   }
 
   private client: GoogleGenAI | null = null
-  private apiKey: string | null = null
 
   async initialize(apiKey: string): Promise<void> {
-    this.apiKey = apiKey
     this.client = new GoogleGenAI({ apiKey })
   }
 

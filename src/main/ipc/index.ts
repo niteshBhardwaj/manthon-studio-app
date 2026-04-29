@@ -3,7 +3,7 @@
 // All IPC communication between main and renderer processes
 // ============================================================
 
-import { ipcMain, dialog, BrowserWindow } from 'electron'
+import { ipcMain, dialog } from 'electron'
 import { writeFile, readFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { app } from 'electron'
@@ -154,7 +154,7 @@ export function registerIpcHandlers(): void {
   // ── File System ─────────────────────────────────────────
   ipcMain.handle(
     'file:save',
-    async (_event, data: string, filename: string, mimeType: string) => {
+    async (_event, data: string, filename: string, _mimeType: string) => {
       const mediaDir = join(app.getPath('userData'), 'media')
       await mkdir(mediaDir, { recursive: true })
 

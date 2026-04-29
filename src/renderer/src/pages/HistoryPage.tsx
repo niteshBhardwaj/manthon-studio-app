@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Clock, Video, Image as ImageIcon, Music, Trash2, Search, RotateCcw, Filter } from 'lucide-react'
+import { Clock, Video, Image as ImageIcon, Music, Trash2, Search, RotateCcw } from 'lucide-react'
 import { cn } from '../lib/utils'
 
 interface HistoryItem {
@@ -26,7 +26,7 @@ export function HistoryPage() {
   useEffect(() => {
     if (window.manthan) {
       window.manthan.getHistory().then((data) => {
-        setHistory(data as HistoryItem[])
+        setHistory(data as unknown as HistoryItem[])
       })
     }
   }, [])

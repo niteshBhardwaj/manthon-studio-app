@@ -1,17 +1,14 @@
 // ============================================================
 // Manthan Studio — Floating Prompt Input
-// Google Flow-inspired creative prompt bar with full generation wiring
-// ============================================================
-
 import { useState, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus,
   ArrowRight,
-  Image as ImageIcon,
   ChevronDown,
   X,
   Sparkles,
+  Image as ImageIcon,
   Volume2,
   Film,
   Loader2
@@ -19,6 +16,7 @@ import {
 import { useGenerationStore, type GenerationJob } from '../../stores/generation-store'
 import { useProviderStore } from '../../stores/provider-store'
 import { cn } from '../../lib/utils'
+import { AnimatedBackground } from '../ui/animated-background'
 
 export function PromptInput() {
   const {
@@ -80,7 +78,7 @@ export function PromptInput() {
           result: result as GenerationJob['result']
         })
       } else if (isAudio) {
-        const result = await window.manthan.generateAudio({ prompt: prompt.trim(), model: selectedModel })
+        const result = await window.manthan.generateAudio({ prompt: prompt.trim(), model: selectedModel }) as any
         updateJob(jobId, {
           status: 'completed',
           progress: 100,
@@ -204,21 +202,35 @@ export function PromptInput() {
 
         {/* Bottom settings pills */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0 1rem 0.75rem' }}>
-          {(['16:9', '9:16'] as const).map((ratio) => (
+        <div className="bg-bg-tertiary/50 p-1 rounded-full flex gap-1 items-center">
+          <AnimatedBackground
+            defaultValue={aspectRatio}
+            onValueChange={(v) => setAspectRatio(v as any)}
+            className="rounded-full bg-accent/20"
+            transition={{ type: 'spring', bounce: 0.2, duration: 0.3 }}
+          >
             <button
-              key={ratio}
-              onClick={() => setAspectRatio(ratio)}
+              data-id="16:9"
+              type="button"
               className={cn(
-                'rounded-md text-[10px] font-semibold uppercase tracking-wider transition-all',
-                aspectRatio === ratio
-                  ? 'bg-accent-soft text-accent border border-accent/20'
-                  : 'text-text-muted hover:text-text-secondary hover:bg-bg-hover'
+                'px-3 py-1.5 rounded-full text-xs font-medium transition-colors z-10',
+                aspectRatio === '16:9' ? 'text-accent' : 'text-text-muted hover:text-text-secondary'
               )}
-              style={{ padding: '0.25rem 0.625rem' }}
             >
-              {ratio === '16:9' ? '16:9 Cinematic' : '9:16 Portrait'}
+              16:9 CINEMATIC
             </button>
-          ))}
+            <button
+              data-id="9:16"
+              type="button"
+              className={cn(
+                'px-3 py-1.5 rounded-full text-xs font-medium transition-colors z-10',
+                aspectRatio === '9:16' ? 'text-accent' : 'text-text-muted hover:text-text-secondary'
+              )}
+            >
+              9:16 PORTRAIT
+            </button>
+          </AnimatedBackground>
+        </div>
           <button
             onClick={() => {
               const r: Array<'720p' | '1080p' | '4k'> = ['720p', '1080p', '4k']

@@ -1,11 +1,9 @@
 // ============================================================
 // Manthan Studio — Media Grid & Cards
 // Output display for generated media (video, image, audio)
-// ============================================================
-
 import { useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { Play, Download, Copy, ArrowRight, Video, Image as ImageIcon, Music, Trash2 } from 'lucide-react'
+import { Play, Download, Copy, Video, Image as ImageIcon, Music, Trash2 } from 'lucide-react'
 import { useGenerationStore, GenerationJob } from '../../stores/generation-store'
 import { cn } from '../../lib/utils'
 

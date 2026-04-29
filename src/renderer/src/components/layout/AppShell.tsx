@@ -62,12 +62,11 @@ export function AppShell() {
   }, [handleKeyDown])
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--color-bg-primary)' }}>
-      {/* Top bar */}
+    <div className="h-screen flex flex-col bg-bg-primary">
       <TopBar />
 
-      {/* Main area: Sidebar + Canvas */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      {/* Main area: Sidebar + Canvas - */}
+      <div className="flex-1 flex overflow-hidden">
         <Sidebar />
         <MainCanvas />
       </div>
