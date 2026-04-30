@@ -39,10 +39,12 @@ export function TopBar() {
       {/* Left: App title + search */}
       <div className="flex items-center gap-4 no-drag">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-accent to-purple-500 flex items-center justify-center">
-            <Zap className="w-3.5 h-3.5 text-white" />
-          </div>
-          <span className="text-sm font-semibold text-text-primary tracking-tight">Manthan</span>
+          <img
+            src="/src/assets/icon.png"
+            alt="Manthan Studio Logo"
+            className="w-7 h-7 rounded-md object-cover drop-shadow-[0_0_8px_rgba(255,215,0,0.6)]"
+          />
+          <span className="text-sm font-semibold text-text-primary tracking-tight">Manthan Studio</span>
         </div>
 
         {/* Search */}

@@ -33,7 +33,7 @@ export function ApiKeyManager() {
 
   return (
     <Dialog open={true} onOpenChange={(open) => { if (!open) closeModal() }}>
-      <DialogContent className="max-w-xl p-0 gap-0 border-border-subtle bg-bg-secondary shadow-float sm:rounded-2xl glass-strong">
+      <DialogContent className="max-w-3xl w-[90vw] p-0 gap-0 border-border-subtle bg-bg-secondary shadow-float sm:rounded-2xl glass-strong">
         {/* Header */}
         <DialogHeader className="px-6 py-4 border-b border-border-subtle">
           <DialogTitle className="text-sm font-semibold text-text-primary">API Keys</DialogTitle>
