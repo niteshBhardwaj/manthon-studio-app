@@ -410,6 +410,25 @@ export function PromptInput(): JSX.Element {
                           onChange={setSelectedModel}
                         />
 
+                        {selectedModelDescriptor?.id === 'lyria-3-clip-preview' ? (
+                          <div className="rounded-lg bg-black/20 p-2.5 text-[10px] text-text-muted leading-relaxed border border-white/5">
+                            <div className="flex items-center justify-between">
+                              <span className="font-semibold text-text-secondary">Duration</span>
+                              <span>30s Fixed</span>
+                            </div>
+                          </div>
+                        ) : selectedModelDescriptor?.id === 'lyria-3-pro-preview' ? (
+                          <div className="rounded-lg bg-black/20 p-2.5 text-[10px] text-text-muted leading-relaxed border border-white/5 mt-1">
+                            <div className="flex items-center justify-between">
+                              <span className="font-semibold text-text-secondary">Max Duration</span>
+                              <span>Up to 184s (~3m 4s)</span>
+                            </div>
+                            <div className="mt-1 text-text-muted/70">
+                              Duration is primarily controlled via prompt instructions.
+                            </div>
+                          </div>
+                        ) : null}
+
                         <div className="pt-2 text-center text-[11px] font-medium text-text-muted">
                           Generating will use{' '}
                           <span className="font-semibold text-text-secondary underline decoration-text-muted/60 underline-offset-2">
@@ -595,19 +614,6 @@ function CapabilityRenderer({
                 onChange={(event) => onSetValue(capability.type, Number(event.target.value))}
                 className="w-full accent-[var(--color-accent)]"
               />
-              {capability.max === 184 ? (
-                <div className="mt-2.5 rounded-lg bg-black/20 p-2.5 text-[10px] text-text-muted leading-relaxed border border-white/5">
-                  <div className="font-semibold text-text-secondary mb-1">Duration Control</div>
-                  <div className="flex justify-between border-b border-white/5 pb-1 mb-1">
-                    <span>Lyria 3 Clip</span>
-                    <span>30s Fixed</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Lyria 3 Pro</span>
-                    <span>Up to 184s (~3m 4s)</span>
-                  </div>
-                </div>
-              ) : null}
             </div>
           )
         }

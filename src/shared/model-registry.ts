@@ -543,7 +543,7 @@ export const MODEL_REGISTRY: ModelDescriptor[] = [
         label: 'Duration (Seconds)',
         min: 0,
         max: 184,
-        step: 1,
+        step: 4,
         defaultValue: 0
       },
       {
