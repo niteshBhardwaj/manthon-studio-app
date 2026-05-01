@@ -52,7 +52,14 @@ export interface ImageGenParams {
   prompt: string
   model?: string
   existingImage?: { data: string; mimeType: string }
+  referenceImages?: Array<{ data: string; mimeType: string }>
   aspectRatio?: string
+  resolution?: string
+  thinkingLevel?: string
+  includeThoughts?: boolean
+  webSearchGrounding?: boolean
+  imageSearchGrounding?: boolean
+  thoughtSignature?: string
 }
 
 export interface AudioGenParams {

@@ -90,38 +90,84 @@ export class GoogleImagenProvider implements MediaProvider {
     const model = params.model || this.config.defaultModel
 
     try {
-      let response
+      const contents: any[] = [{ text: params.prompt }]
 
       if (params.existingImage) {
-        // Image editing — pass existing image + prompt
-        response = await this.client.models.generateContent({
-          model,
-          contents: [
-            { text: params.prompt },
-            {
-              inlineData: {
-                mimeType: params.existingImage.mimeType,
-                data: params.existingImage.data
-              }
-            }
-          ]
-        })
-      } else {
-        // Text-to-image
-        response = await this.client.models.generateContent({
-          model,
-          contents: params.prompt
+        contents.push({
+          inlineData: {
+            mimeType: params.existingImage.mimeType,
+            data: params.existingImage.data
+          }
         })
       }
 
-      // Extract image from response
+      if (params.referenceImages && params.referenceImages.length > 0) {
+        for (const img of params.referenceImages) {
+          contents.push({
+            inlineData: {
+              mimeType: img.mimeType,
+              data: img.data
+            }
+          })
+        }
+      }
+
+      if (params.thoughtSignature) {
+        contents.push({
+          thoughtSignature: params.thoughtSignature
+        })
+      }
+
+      const config: any = {
+        responseModalities: ['Image']
+      }
+
+      if (params.aspectRatio || params.resolution) {
+        config.imageConfig = {}
+        if (params.aspectRatio) config.imageConfig.aspectRatio = params.aspectRatio
+        if (params.resolution) config.imageConfig.imageSize = params.resolution
+      }
+
+      if (params.thinkingLevel) {
+        config.thinkingConfig = { thinkingLevel: params.thinkingLevel }
+      }
+
+      if (params.webSearchGrounding) {
+        config.tools = config.tools || []
+        config.tools.push({ googleSearch: {} })
+      }
+
+      const response = await this.client.models.generateContent({
+        model,
+        contents,
+        config
+      })
+
       const parts = response.candidates?.[0]?.content?.parts || []
+      const images: Array<{ data: string; mimeType: string }> = []
+      let thoughtSignature: string | undefined
+
       for (const part of parts) {
         if (part.inlineData) {
-          return {
-            type: 'image',
+          images.push({
             data: part.inlineData.data || '',
             mimeType: part.inlineData.mimeType || 'image/png'
+          })
+        }
+        if (part.thoughtSignature) {
+          thoughtSignature = part.thoughtSignature
+        }
+      }
+
+      if (images.length > 0) {
+        const finalImage = images[images.length - 1]
+        return {
+          type: 'image',
+          data: finalImage.data,
+          mimeType: finalImage.mimeType,
+          metadata: {
+            images,
+            thoughtSignature
           }
         }
       }

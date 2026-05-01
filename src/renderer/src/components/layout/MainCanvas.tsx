@@ -12,8 +12,10 @@ import { useModelStore } from '../../stores/model-store'
 import {
   getAvailableContentTypes,
   getDefaultModel,
+  getModelById,
   type ContentType
 } from '../../lib/model-capabilities'
+import { PromptExamplesList } from '../generation/PromptExamplesList'
 import { PromptInput } from '../generation/PromptInput'
 import { TemplateSelector } from '../generation/TemplateSelector'
 import { MediaGrid } from '../output/MediaGrid'
@@ -50,8 +52,9 @@ export function MainCanvas(): JSX.Element {
 
 function EmptyState(): JSX.Element {
   const { enabledModelIds } = useModelStore()
-  const { setContentType } = useGenerationStore()
+  const { setContentType, setPrompt, selectedModel, setCapabilityValue } = useGenerationStore()
   const availableTypes = getAvailableContentTypes(enabledModelIds)
+  const selectedModelDescriptor = getModelById(selectedModel)
 
   const handleSelectType = (type: ContentType): void => {
     setContentType(type, enabledModelIds)
@@ -107,7 +110,7 @@ function EmptyState(): JSX.Element {
           ingredients whenever you want tighter control.
         </p>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {/* <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {availableTypes.map((type) => {
             const Icon = type === 'video' ? Video : type === 'audio' ? Music : ImageIcon
             const defaultModel = getDefaultModel(type, enabledModelIds) ?? getDefaultModel(type)
@@ -137,7 +140,25 @@ function EmptyState(): JSX.Element {
               </motion.button>
             )
           })}
-        </div>
+        </div> */}
+
+        {selectedModelDescriptor?.examples && selectedModelDescriptor.examples.length > 0 && (
+          <PromptExamplesList
+            examples={selectedModelDescriptor.examples}
+            onSelect={(prompt, configOverrides) => {
+              setPrompt(prompt)
+              if (configOverrides) {
+                Object.entries(configOverrides).forEach(([key, value]) => {
+                  setCapabilityValue(key, value as string | number | boolean)
+                })
+              }
+              setTimeout(() => {
+                const textarea = document.querySelector<HTMLTextAreaElement>('textarea')
+                textarea?.focus()
+              }, 100)
+            }}
+          />
+        )}
       </motion.div>
     </div>
   )

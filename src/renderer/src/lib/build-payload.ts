@@ -1,7 +1,7 @@
 import type { AudioGenParams, ImageGenParams, VideoGenParams } from '../../../main/providers/base'
 import { getModelById, type CapabilityValue, type ModelDescriptor } from './model-capabilities'
 
-type BinaryInput = { data: string; mimeType: string }
+type BinaryInput = { data: string; mimeType: string; metadata?: Record<string, unknown> }
 
 interface BuildPayloadArgs {
   prompt: string
@@ -150,17 +150,48 @@ export function buildPayload({
       asString(capabilityValues.style_select, 'Style')
     )
 
+    const resolution = assertOptionValue(
+      model,
+      'resolution',
+      asString(capabilityValues.resolution, 'Resolution')
+    )
+    const thinkingLevel = assertOptionValue(
+      model,
+      'thinking_level',
+      asString(capabilityValues.thinking_level, 'Thinking Level')
+    )
+    const includeThoughts = asBoolean(capabilityValues.include_thoughts, 'Thinking Toggle')
+    const webSearchGrounding = asBoolean(capabilityValues.web_search_grounding, 'Web Search Grounding')
+    const imageSearchGrounding = asBoolean(capabilityValues.image_search_grounding, 'Image Search Grounding')
+
     const styledPrompt =
       style && style !== 'natural' ? `${trimmedPrompt}. Style: ${style}.` : trimmedPrompt
 
     const params: ImageGenParams = {
       prompt: styledPrompt,
       model: model.id,
-      aspectRatio
+      aspectRatio,
+      resolution,
+      thinkingLevel,
+      includeThoughts,
+      webSearchGrounding,
+      imageSearchGrounding
     }
 
     if (startFrame) {
       params.existingImage = startFrame
+      if (startFrame.metadata?.thoughtSignature) {
+        params.thoughtSignature = startFrame.metadata.thoughtSignature as string
+      }
+    }
+    
+    if (referenceImages && referenceImages.length > 0) {
+      params.referenceImages = referenceImages
+      
+      const sig = referenceImages.find(img => img.metadata?.thoughtSignature)?.metadata?.thoughtSignature
+      if (sig) {
+        params.thoughtSignature = sig as string
+      }
     }
 
     return {

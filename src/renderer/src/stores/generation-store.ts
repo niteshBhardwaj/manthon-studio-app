@@ -14,7 +14,7 @@ import {
 
 export type GenerationStatus = 'idle' | 'queued' | 'generating' | 'completed' | 'failed'
 export type GenerationType = ContentType
-export type BinaryInput = { data: string; mimeType: string }
+export type BinaryInput = { data: string; mimeType: string; metadata?: Record<string, unknown> }
 
 const defaultImageModel = getDefaultModel('image')
 
@@ -191,8 +191,7 @@ export const useGenerationStore = create<GenerationState>((set) => ({
   setEndFrame: (frame) => set({ endFrame: frame }),
   addReferenceImage: (img) =>
     set((s) => ({
-      referenceImages:
-        s.referenceImages.length < 3 ? [...s.referenceImages, img] : s.referenceImages
+      referenceImages: [...s.referenceImages, img]
     })),
   removeReferenceImage: (index) =>
     set((s) => ({

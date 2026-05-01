@@ -3,13 +3,16 @@ import { AnimatePresence, motion } from 'framer-motion'
 import {
   ArrowRight,
   ArrowLeftRight,
+  Brain,
   ChevronDown,
   Film,
+  Globe,
   Image as ImageIcon,
   Loader2,
   Music,
   Package2,
   Plus,
+  Search,
   Sparkles,
   Video,
   Volume2,
@@ -114,6 +117,13 @@ export function PromptInput(): JSX.Element {
     window.manthan?.setActiveProvider(selectedModelDescriptor.provider)
   }, [selectedModelDescriptor, setActiveProvider])
 
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = '0px'
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`
+    }
+  }, [prompt])
+
   const handleFileUpload = useCallback(
     async (target: 'start' | 'end' | 'reference') => {
       if (!window.manthan) return
@@ -133,7 +143,7 @@ export function PromptInput(): JSX.Element {
   )
   const handlePrimaryAttachment = useCallback(() => {
     if (contentType === 'image') {
-      void handleFileUpload('start')
+      void handleFileUpload('reference')
       return
     }
 
@@ -278,8 +288,8 @@ export function PromptInput(): JSX.Element {
     if (contentType === 'video' && activeMode === 'frames') {
       return 'Describe the motion between your opening and closing frames...'
     }
-    if (contentType === 'image' && startFrame) {
-      return 'Describe how to transform the uploaded image...'
+    if (contentType === 'image' && referenceImages.length > 0) {
+      return 'Describe how to transform the uploaded images...'
     }
     return 'Describe what you want to create...'
   }, [activeMode, contentType, startFrame])
@@ -316,6 +326,7 @@ export function PromptInput(): JSX.Element {
                   startFrame={startFrame}
                   endFrame={endFrame}
                   referenceImages={referenceImages}
+                  maxImages={selectedModelDescriptor?.maxImages}
                   onStartUpload={() => handleFileUpload('start')}
                   onEndUpload={() => handleFileUpload('end')}
                   onReferenceUpload={() => handleFileUpload('reference')}
@@ -352,7 +363,7 @@ export function PromptInput(): JSX.Element {
                 }}
                 placeholder={promptPlaceholder}
                 rows={1}
-                className="max-h-32 min-h-[2rem] flex-1 resize-none bg-transparent py-1.5 text-[14px] leading-5 text-text-primary outline-none placeholder:text-text-muted/55"
+                className="max-h-32 min-h-[2rem] flex-1 resize-none bg-transparent py-1.5 text-[14px] leading-5 text-text-primary outline-none placeholder:text-text-muted/55 scrollbar-hide"
               />
             </div>
           </div>
@@ -589,8 +600,19 @@ function CapabilityRenderer({
           )
         }
 
-        if (capability.type === 'audio_toggle') {
-          const enabled = Boolean(values.audio_toggle ?? capability.defaultValue ?? true)
+        if (
+          capability.type === 'audio_toggle' ||
+          capability.type === 'include_thoughts' ||
+          capability.type === 'web_search_grounding' ||
+          capability.type === 'image_search_grounding'
+        ) {
+          const enabled = Boolean(values[capability.type] ?? capability.defaultValue ?? false)
+          
+          let IconComp = Volume2
+          if (capability.type === 'include_thoughts') IconComp = Brain
+          if (capability.type === 'web_search_grounding') IconComp = Globe
+          if (capability.type === 'image_search_grounding') IconComp = Search
+
           return (
             <button
               key={capability.type}
@@ -603,7 +625,7 @@ function CapabilityRenderer({
                   : 'border-border-subtle bg-bg-elevated/40 text-text-secondary hover:bg-bg-hover hover:text-text-primary'
               )}
             >
-              <Volume2 className="h-4 w-4" />
+              <IconComp className="h-4 w-4" />
               <span>{capability.label}</span>
             </button>
           )
@@ -632,7 +654,11 @@ function CapabilityRenderer({
           )
         }
 
-        if (capability.type === 'resolution' || capability.type === 'style_select') {
+        if (
+          capability.type === 'resolution' ||
+          capability.type === 'style_select' ||
+          capability.type === 'thinking_level'
+        ) {
           return (
             <PillRow
               key={capability.type}
@@ -776,6 +802,7 @@ function PromptAttachmentArea({
   startFrame,
   endFrame,
   referenceImages,
+  maxImages,
   onStartUpload,
   onEndUpload,
   onReferenceUpload,
@@ -789,6 +816,7 @@ function PromptAttachmentArea({
   startFrame: BinaryInput | null
   endFrame: BinaryInput | null
   referenceImages: BinaryInput[]
+  maxImages?: number
   onStartUpload: () => void
   onEndUpload: () => void
   onReferenceUpload: () => void
@@ -798,14 +826,43 @@ function PromptAttachmentArea({
   onClearReferences: () => void
 }): JSX.Element | null {
   if (contentType === 'image') {
+    const totalImages = referenceImages.length
+    const canAddMore = totalImages < (maxImages ?? 1)
+    
     return (
-      <div className="flex items-start gap-3">
-        <MediaPreviewChip
-          label="Reference"
-          frame={startFrame}
-          onUpload={onStartUpload}
-          onClear={onStartClear}
-        />
+      <div className="w-full rounded-[1.1rem] bg-white/4 p-2.5">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-xs font-medium text-text-secondary">Reference Images</span>
+          {referenceImages.length > 0 ? (
+            <button
+              type="button"
+              onClick={onClearReferences}
+              className="text-[11px] text-text-muted transition-colors hover:text-text-secondary"
+            >
+              Clear all
+            </button>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {referenceImages.map((img, index) => (
+            <MediaPreviewChip
+              key={index}
+              label={`Reference ${index + 1}`}
+              frame={img}
+              onUpload={() => {}}
+              onClear={() => onReferenceClear(index)}
+            />
+          ))}
+          {canAddMore ? (
+             <button
+               type="button"
+               onClick={onReferenceUpload}
+               className="relative flex h-[4.25rem] w-[4.25rem] items-center justify-center overflow-hidden rounded-[1rem] border border-dashed border-border-subtle bg-bg-elevated/30 text-text-muted transition-all hover:border-border-focus hover:bg-bg-hover"
+             >
+               <Plus className="h-5 w-5" />
+             </button>
+          ) : null}
+        </div>
       </div>
     )
   }
@@ -1100,15 +1157,41 @@ function SelectedOptionsDisplay({
           onSetValue('duration', nextValue)
         }
       })
-    } else if (cap.type === 'audio_toggle') {
-      const enabled = Boolean(values.audio_toggle ?? cap.defaultValue ?? true)
+    } else if (
+      cap.type === 'audio_toggle' ||
+      cap.type === 'include_thoughts' ||
+      cap.type === 'web_search_grounding' ||
+      cap.type === 'image_search_grounding'
+    ) {
+      const enabled = Boolean(values[cap.type] ?? cap.defaultValue ?? false)
+      let labelOn = 'On'
+      let labelOff = 'Off'
+      if (cap.type === 'audio_toggle') {
+        labelOn = 'Sound On'
+        labelOff = 'Sound Off'
+      } else if (cap.type === 'include_thoughts') {
+        labelOn = 'Thinking On'
+        labelOff = 'Thinking Off'
+      } else if (cap.type === 'web_search_grounding') {
+        labelOn = 'Web Search On'
+        labelOff = 'Web Search Off'
+      } else if (cap.type === 'image_search_grounding') {
+        labelOn = 'Image Search On'
+        labelOff = 'Image Search Off'
+      }
+
       items.push({
-        label: enabled ? 'Sound On' : 'Sound Off',
+        label: enabled ? labelOn : labelOff,
         onClick: () => {
-          onSetValue('audio_toggle', !enabled)
+          onSetValue(cap.type, !enabled)
         }
       })
-    } else if (cap.type === 'aspect_ratio' || cap.type === 'resolution' || cap.type === 'style_select') {
+    } else if (
+      cap.type === 'aspect_ratio' ||
+      cap.type === 'resolution' ||
+      cap.type === 'style_select' ||
+      cap.type === 'thinking_level'
+    ) {
       const val = String(values[cap.type] ?? cap.defaultValue ?? '')
       const optIndex = cap.options?.findIndex((o) => String(o.value) === val) ?? -1
       const opt = cap.options?.[optIndex !== -1 ? optIndex : 0]
