@@ -10,7 +10,6 @@ import { useAppStore } from '../../stores/app-store'
 export function TopBar(): JSX.Element {
   const { searchQuery, setSearchQuery, openModal } = useAppStore()
 
-
   return (
     <div className="drag-region flex h-12 items-center justify-between border-b border-border-subtle bg-bg-secondary/50 px-4">
       <div className="no-drag flex items-center gap-4">

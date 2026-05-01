@@ -193,7 +193,9 @@ export class GoogleVeoProvider implements MediaProvider {
       this.operations.set(operationId, updated)
 
       const done = (updated as { done?: boolean }).done
-      const response = (updated as { response?: { generatedVideos?: Array<{ video?: { uri?: string } }> } }).response
+      const response = (
+        updated as { response?: { generatedVideos?: Array<{ video?: { uri?: string } }> } }
+      ).response
 
       if (done && response?.generatedVideos?.[0]) {
         const video = response.generatedVideos[0].video

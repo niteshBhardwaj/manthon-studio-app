@@ -161,8 +161,14 @@ export function buildPayload({
       asString(capabilityValues.thinking_level, 'Thinking Level')
     )
     const includeThoughts = asBoolean(capabilityValues.include_thoughts, 'Thinking Toggle')
-    const webSearchGrounding = asBoolean(capabilityValues.web_search_grounding, 'Web Search Grounding')
-    const imageSearchGrounding = asBoolean(capabilityValues.image_search_grounding, 'Image Search Grounding')
+    const webSearchGrounding = asBoolean(
+      capabilityValues.web_search_grounding,
+      'Web Search Grounding'
+    )
+    const imageSearchGrounding = asBoolean(
+      capabilityValues.image_search_grounding,
+      'Image Search Grounding'
+    )
 
     const styledPrompt =
       style && style !== 'natural' ? `${trimmedPrompt}. Style: ${style}.` : trimmedPrompt
@@ -184,11 +190,12 @@ export function buildPayload({
         params.thoughtSignature = startFrame.metadata.thoughtSignature as string
       }
     }
-    
+
     if (referenceImages && referenceImages.length > 0) {
       params.referenceImages = referenceImages
-      
-      const sig = referenceImages.find(img => img.metadata?.thoughtSignature)?.metadata?.thoughtSignature
+
+      const sig = referenceImages.find((img) => img.metadata?.thoughtSignature)?.metadata
+        ?.thoughtSignature
       if (sig) {
         params.thoughtSignature = sig as string
       }
@@ -202,10 +209,21 @@ export function buildPayload({
   }
 
   const duration = asNumber(capabilityValues.duration, 'Duration')
+  const audioFormat = assertOptionValue(
+    model,
+    'audio_format',
+    asString(capabilityValues.audio_format, 'Audio format')
+  ) as AudioGenParams['audioFormat'] | undefined
+
   const params: AudioGenParams = {
     prompt: trimmedPrompt,
     model: model.id,
-    duration
+    duration,
+    audioFormat
+  }
+
+  if (activeMode === 'ingredients' && referenceImages.length > 0) {
+    params.referenceImages = referenceImages
   }
 
   return {

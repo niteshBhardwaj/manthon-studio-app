@@ -3,13 +3,7 @@
 // Navigation with cinematic minimal design
 // ============================================================
 
-import {
-  Plus,
-  Clock,
-  FolderOpen,
-  Sparkles,
-  Settings
-} from 'lucide-react'
+import { Plus, Clock, FolderOpen, Sparkles, Settings } from 'lucide-react'
 import { useAppStore } from '../../stores/app-store'
 import { cn } from '../../lib/utils'
 import { AnimatedBackground } from '../ui/animated-background'
@@ -35,7 +29,7 @@ export function Sidebar() {
             defaultValue={activeSidebarTab}
             onValueChange={(v) => setSidebarTab(v as any)}
             className="rounded-full bg-accent/20"
-            transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
+            transition={{ type: 'spring', bounce: 0.2, duration: 0.4 }}
           >
             {navItems.map((item) => {
               const Icon = item.icon
@@ -48,7 +42,9 @@ export function Sidebar() {
                   type="button"
                   className={cn(
                     'w-full aspect-square flex items-center justify-center rounded-full transition-colors duration-200 z-10',
-                    isActive ? 'text-accent' : 'text-text-muted hover:text-text-secondary hover:bg-bg-hover/50'
+                    isActive
+                      ? 'text-accent'
+                      : 'text-text-muted hover:text-text-secondary hover:bg-bg-hover/50'
                   )}
                   title={item.label}
                 >

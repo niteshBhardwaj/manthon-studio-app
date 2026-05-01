@@ -21,7 +21,8 @@ const defaultTemplates: Template[] = [
   {
     id: 'cinematic',
     name: 'Cinematic Shot',
-    prompt: 'A cinematic shot with dramatic lighting, shallow depth of field, anamorphic lens flare, film grain, professional color grading.',
+    prompt:
+      'A cinematic shot with dramatic lighting, shallow depth of field, anamorphic lens flare, film grain, professional color grading.',
     category: 'style',
     icon: <Film className="w-5 h-5" />,
     gradient: 'from-blue-600/20 to-indigo-600/20'
@@ -29,7 +30,8 @@ const defaultTemplates: Template[] = [
   {
     id: 'dialogue',
     name: 'Dialogue Scene',
-    prompt: 'A close-up conversation scene between two people. Natural lighting, intimate framing, clear dialogue with subtle ambient sound.',
+    prompt:
+      'A close-up conversation scene between two people. Natural lighting, intimate framing, clear dialogue with subtle ambient sound.',
     category: 'scene',
     icon: <Camera className="w-5 h-5" />,
     gradient: 'from-emerald-600/20 to-teal-600/20'
@@ -37,7 +39,8 @@ const defaultTemplates: Template[] = [
   {
     id: 'realism',
     name: 'Photorealism',
-    prompt: 'Ultra-realistic, photorealistic quality, natural lighting, no artifacts, no distortion, professional photography style.',
+    prompt:
+      'Ultra-realistic, photorealistic quality, natural lighting, no artifacts, no distortion, professional photography style.',
     category: 'style',
     icon: <Sparkles className="w-5 h-5" />,
     gradient: 'from-amber-600/20 to-yellow-600/20'
@@ -45,7 +48,8 @@ const defaultTemplates: Template[] = [
   {
     id: 'product-ad',
     name: 'Product Ad',
-    prompt: 'Professional product advertisement. Clean white background, studio lighting, smooth camera movement, premium feel.',
+    prompt:
+      'Professional product advertisement. Clean white background, studio lighting, smooth camera movement, premium feel.',
     category: 'commercial',
     icon: <ShoppingBag className="w-5 h-5" />,
     gradient: 'from-rose-600/20 to-pink-600/20'
@@ -53,7 +57,8 @@ const defaultTemplates: Template[] = [
   {
     id: 'storytelling',
     name: 'Storytelling',
-    prompt: 'A narrative sequence with emotional depth, character-driven action, atmospheric soundtrack, cinematic pacing.',
+    prompt:
+      'A narrative sequence with emotional depth, character-driven action, atmospheric soundtrack, cinematic pacing.',
     category: 'narrative',
     icon: <BookOpen className="w-5 h-5" />,
     gradient: 'from-violet-600/20 to-purple-600/20'
@@ -61,7 +66,8 @@ const defaultTemplates: Template[] = [
   {
     id: 'abstract-art',
     name: 'Abstract Art',
-    prompt: 'Abstract fluid motion, vivid colors morphing and flowing, dreamlike atmosphere, slow ethereal movement.',
+    prompt:
+      'Abstract fluid motion, vivid colors morphing and flowing, dreamlike atmosphere, slow ethereal movement.',
     category: 'creative',
     icon: <Palette className="w-5 h-5" />,
     gradient: 'from-cyan-600/20 to-sky-600/20'
@@ -69,7 +75,8 @@ const defaultTemplates: Template[] = [
   {
     id: 'action',
     name: 'Action Sequence',
-    prompt: 'High-energy action sequence, dynamic camera movements, fast cuts, intense atmosphere, dramatic sound design.',
+    prompt:
+      'High-energy action sequence, dynamic camera movements, fast cuts, intense atmosphere, dramatic sound design.',
     category: 'scene',
     icon: <Zap className="w-5 h-5" />,
     gradient: 'from-orange-600/20 to-red-600/20'
@@ -99,11 +106,12 @@ export function TemplateSelector() {
             animate={{ opacity: 1, y: 0 }}
             whileHover={{ scale: 1.02, y: -2 }}
             whileTap={{ scale: 0.98 }}
-            transition={{ type: "spring", stiffness: 300, damping: 25, delay: i * 0.05 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 25, delay: i * 0.05 }}
             onClick={() => handleSelectTemplate(template)}
             className={cn(
               'group text-left p-4 rounded-xl border border-border-subtle',
-              'bg-gradient-to-br', template.gradient,
+              'bg-gradient-to-br',
+              template.gradient,
               'hover:border-accent/40 hover:shadow-lg',
               'transition-colors duration-200 cursor-pointer'
             )}

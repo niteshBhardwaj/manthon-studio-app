@@ -66,6 +66,8 @@ export interface AudioGenParams {
   prompt: string
   model?: string
   duration?: number
+  audioFormat?: 'mp3' | 'wav'
+  referenceImages?: Array<{ data: string; mimeType: string }>
 }
 
 export interface GenerationOperation {

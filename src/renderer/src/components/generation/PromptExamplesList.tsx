@@ -1,5 +1,5 @@
 import { type JSX } from 'react'
-import { Plus } from 'lucide-react'
+import { Plus, Music } from 'lucide-react'
 import { type PromptExample } from '../../../../shared/model-registry'
 
 import {
@@ -39,6 +39,13 @@ const exampleImageMap: Record<string, string> = {
   isometric_garden: isometricGarden
 }
 
+function getYouTubeThumbnail(url?: string): string {
+  if (!url) return ''
+  const match = url.match(/embed\/([^?]+)/)
+  // Use hqdefault instead of maxresdefault as it's more widely available
+  return match ? `https://img.youtube.com/vi/${match[1]}/hqdefault.jpg` : ''
+}
+
 export function PromptExamplesList({
   examples,
   onSelect
@@ -65,14 +72,26 @@ export function PromptExamplesList({
             }}
           >
             <MorphingDialogTrigger className="group relative flex h-28 flex-col items-start justify-end overflow-hidden rounded-xl bg-bg-elevated text-left transition-all hover:-translate-y-0.5 hover:ring-2 hover:ring-accent/50 hover:shadow-lg select-none">
-              <MorphingDialogImage
-                src={exampleImageMap[example.imageName]}
-                alt={example.title}
-                className="absolute inset-0 h-full w-full object-cover opacity-60 transition-transform duration-500 group-hover:scale-110 group-hover:opacity-80 pointer-events-none"
-              />
+              {example.youtubeLink ? (
+                <MorphingDialogImage
+                  src={getYouTubeThumbnail(example.youtubeLink)}
+                  alt={example.title}
+                  className="absolute inset-0 h-full w-full object-cover opacity-60 transition-transform duration-500 group-hover:scale-110 group-hover:opacity-80 pointer-events-none"
+                />
+              ) : example.audioLink ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-indigo-500/20 via-purple-500/20 to-pink-500/20 pointer-events-none group-hover:scale-110 transition-transform duration-500">
+                  <Music className="h-12 w-12 text-accent/50 drop-shadow-md" />
+                </div>
+              ) : (
+                <MorphingDialogImage
+                  src={exampleImageMap[example.imageName]}
+                  alt={example.title}
+                  className="absolute inset-0 h-full w-full object-cover opacity-60 transition-transform duration-500 group-hover:scale-110 group-hover:opacity-80 pointer-events-none"
+                />
+              )}
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none" />
-              
-              <div 
+
+              <div
                 role="button"
                 className="absolute top-2 right-2 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md opacity-0 group-hover:opacity-100 transition-all hover:bg-accent hover:scale-110 cursor-pointer pointer-events-auto"
                 title="Quick Use Strategy"
@@ -94,12 +113,34 @@ export function PromptExamplesList({
 
             <MorphingDialogContainer>
               <MorphingDialogContent className="pointer-events-auto relative flex h-auto w-full flex-col overflow-hidden rounded-[24px] border border-border-subtle bg-bg-primary shadow-2xl sm:w-[550px]">
-                <MorphingDialogImage
-                  src={exampleImageMap[example.imageName]}
-                  alt={example.title}
-                  className="h-72 w-full object-cover"
-                />
-                
+                {example.youtubeLink ? (
+                  <iframe
+                    src={`${example.youtubeLink}?autoplay=1&mute=1&loop=1&playlist=${example.youtubeLink.split('/').pop()}`}
+                    className="h-72 w-full object-cover border-0"
+                    allow="autoplay; encrypted-media"
+                    allowFullScreen
+                  />
+                ) : example.audioLink ? (
+                  <div className="flex h-72 w-full flex-col items-center justify-center bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-pink-500/10 p-6 relative">
+                    <Music className="mb-6 h-16 w-16 text-accent/40" />
+                    {example.audioLink.endsWith('.webm') ? (
+                      <video
+                        controls
+                        src={example.audioLink}
+                        className="w-full max-w-md rounded-lg shadow-md"
+                      />
+                    ) : (
+                      <audio controls src={example.audioLink} className="w-full max-w-md" />
+                    )}
+                  </div>
+                ) : (
+                  <MorphingDialogImage
+                    src={exampleImageMap[example.imageName]}
+                    alt={example.title}
+                    className="h-72 w-full object-cover"
+                  />
+                )}
+
                 <div className="p-6 flex flex-col gap-4">
                   <div>
                     <MorphingDialogTitle className="text-xl font-semibold text-text-primary mb-1">

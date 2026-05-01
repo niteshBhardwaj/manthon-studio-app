@@ -35,7 +35,9 @@ export function AssetsPage() {
               onClick={() => setViewMode('grid')}
               className={cn(
                 'w-7 h-7 rounded-md flex items-center justify-center transition-all',
-                viewMode === 'grid' ? 'bg-accent-soft text-accent' : 'text-text-muted hover:text-text-secondary'
+                viewMode === 'grid'
+                  ? 'bg-accent-soft text-accent'
+                  : 'text-text-muted hover:text-text-secondary'
               )}
             >
               <Grid className="w-3.5 h-3.5" />
@@ -44,7 +46,9 @@ export function AssetsPage() {
               onClick={() => setViewMode('list')}
               className={cn(
                 'w-7 h-7 rounded-md flex items-center justify-center transition-all',
-                viewMode === 'list' ? 'bg-accent-soft text-accent' : 'text-text-muted hover:text-text-secondary'
+                viewMode === 'list'
+                  ? 'bg-accent-soft text-accent'
+                  : 'text-text-muted hover:text-text-secondary'
               )}
             >
               <List className="w-3.5 h-3.5" />
@@ -66,7 +70,7 @@ export function AssetsPage() {
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 12 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
           style={{ textAlign: 'center', width: '100%', maxWidth: '32rem', padding: '0 2rem' }}
         >
           {/* Animated icon */}
@@ -74,7 +78,11 @@ export function AssetsPage() {
             <motion.div
               animate={{
                 y: [0, -4, 0],
-                boxShadow: ["0 0 0px oklch(0.7 0.18 250 / 0)", "0 0 20px oklch(0.7 0.18 250 / 0.15)", "0 0 0px oklch(0.7 0.18 250 / 0)"]
+                boxShadow: [
+                  '0 0 0px oklch(0.7 0.18 250 / 0)',
+                  '0 0 20px oklch(0.7 0.18 250 / 0.15)',
+                  '0 0 0px oklch(0.7 0.18 250 / 0)'
+                ]
               }}
               transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
               className="w-16 h-16 rounded-2xl bg-gradient-to-br from-bg-elevated to-bg-secondary border border-border-subtle flex items-center justify-center relative overflow-hidden"
@@ -88,7 +96,8 @@ export function AssetsPage() {
             No assets yet
           </h3>
           <p className="text-sm text-text-muted/90 mx-auto leading-relaxed mb-10">
-            Generated media will automatically appear here. You can also import your own images and videos.
+            Generated media will automatically appear here. You can also import your own images and
+            videos.
           </p>
 
           <motion.button
@@ -107,7 +116,10 @@ export function AssetsPage() {
               { icon: ImageIcon, label: 'PNG, JPG, WebP' },
               { icon: Music, label: 'MP3, WAV' }
             ].map(({ icon: Icon, label }) => (
-              <div key={label} className="flex items-center gap-1.5 text-[11px] font-medium text-text-muted/60 bg-bg-secondary px-2.5 py-1 rounded-md border border-border-subtle/50">
+              <div
+                key={label}
+                className="flex items-center gap-1.5 text-[11px] font-medium text-text-muted/60 bg-bg-secondary px-2.5 py-1 rounded-md border border-border-subtle/50"
+              >
                 <Icon className="w-3.5 h-3.5" />
                 {label}
               </div>

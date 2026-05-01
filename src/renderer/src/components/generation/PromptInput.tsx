@@ -86,7 +86,7 @@ export function PromptInput(): JSX.Element {
   )
   const selectedModelDescriptor = useMemo(() => getModelById(selectedModel), [selectedModel])
   const isFramesMode = contentType === 'video' && activeMode === 'frames'
-  const isIngredientsMode = contentType === 'video' && activeMode === 'ingredients'
+  const isIngredientsMode = activeMode === 'ingredients'
   const activeModeDescriptor =
     selectedModelDescriptor?.modes?.find((mode) => mode.id === activeMode) ?? null
   const visibleCapabilities = useMemo(
@@ -298,7 +298,8 @@ export function PromptInput(): JSX.Element {
       contentType === 'video' ? 10 : contentType === 'image' ? 6 : contentType === 'audio' ? 4 : 0
     return base * Math.max(1, batchCount)
   }, [batchCount, contentType])
-  const showPrimaryAttachmentButton = contentType !== 'audio' && !isFramesMode
+  const showPrimaryAttachmentButton =
+    (contentType !== 'audio' || isIngredientsMode) && !isFramesMode
   const hasAttachmentContent =
     Boolean(startFrame) || Boolean(endFrame) || referenceImages.length > 0 || isFramesMode
 
@@ -307,9 +308,7 @@ export function PromptInput(): JSX.Element {
   })
 
   return (
-    <motion.div
-      className="absolute bottom-6 left-1/2 z-40 w-full max-w-3xl -translate-x-1/2 px-4"
-    >
+    <motion.div className="absolute bottom-6 left-1/2 z-40 w-full max-w-3xl -translate-x-1/2 px-4">
       <div className="relative">
         <motion.div
           className={cn(
@@ -317,7 +316,7 @@ export function PromptInput(): JSX.Element {
             isFocused ? 'shadow-glow shadow-float' : 'shadow-lg'
           )}
         >
-          <div className="flex flex-col gap-2.5 lg:pr-[10rem]">
+          <div className="flex flex-col gap-2.5">
             {hasAttachmentContent ? (
               <div className="flex items-start">
                 <PromptAttachmentArea
@@ -338,7 +337,7 @@ export function PromptInput(): JSX.Element {
               </div>
             ) : null}
 
-            <div className="flex items-start gap-3">
+            <div className="flex items-start gap-3 lg:pr-[10rem]">
               {showPrimaryAttachmentButton ? (
                 <button
                   type="button"
@@ -585,7 +584,7 @@ function CapabilityRenderer({
             >
               <div className="mb-1.5 flex items-center justify-between text-[11px] font-medium text-text-secondary">
                 <span>{capability.label}</span>
-                <span>{currentValue}s</span>
+                <span>{currentValue === 0 ? 'Auto (Prompt Guided)' : `${currentValue}s`}</span>
               </div>
               <input
                 type="range"
@@ -596,6 +595,19 @@ function CapabilityRenderer({
                 onChange={(event) => onSetValue(capability.type, Number(event.target.value))}
                 className="w-full accent-[var(--color-accent)]"
               />
+              {capability.max === 184 ? (
+                <div className="mt-2.5 rounded-lg bg-black/20 p-2.5 text-[10px] text-text-muted leading-relaxed border border-white/5">
+                  <div className="font-semibold text-text-secondary mb-1">Duration Control</div>
+                  <div className="flex justify-between border-b border-white/5 pb-1 mb-1">
+                    <span>Lyria 3 Clip</span>
+                    <span>30s Fixed</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Lyria 3 Pro</span>
+                    <span>Up to 184s (~3m 4s)</span>
+                  </div>
+                </div>
+              ) : null}
             </div>
           )
         }
@@ -607,7 +619,7 @@ function CapabilityRenderer({
           capability.type === 'image_search_grounding'
         ) {
           const enabled = Boolean(values[capability.type] ?? capability.defaultValue ?? false)
-          
+
           let IconComp = Volume2
           if (capability.type === 'include_thoughts') IconComp = Brain
           if (capability.type === 'web_search_grounding') IconComp = Globe
@@ -657,7 +669,8 @@ function CapabilityRenderer({
         if (
           capability.type === 'resolution' ||
           capability.type === 'style_select' ||
-          capability.type === 'thinking_level'
+          capability.type === 'thinking_level' ||
+          capability.type === 'audio_format'
         ) {
           return (
             <PillRow
@@ -825,14 +838,16 @@ function PromptAttachmentArea({
   onReferenceClear: (index: number) => void
   onClearReferences: () => void
 }): JSX.Element | null {
-  if (contentType === 'image') {
+  if (contentType === 'image' || (contentType === 'audio' && activeMode === 'ingredients')) {
     const totalImages = referenceImages.length
     const canAddMore = totalImages < (maxImages ?? 1)
-    
+
     return (
       <div className="w-full rounded-[1.1rem] bg-white/4 p-2.5">
         <div className="mb-2 flex items-center justify-between">
-          <span className="text-xs font-medium text-text-secondary">Reference Images</span>
+          <span className="text-xs font-medium text-text-secondary">
+            {contentType === 'audio' ? 'Ingredients' : 'Reference Images'}
+          </span>
           {referenceImages.length > 0 ? (
             <button
               type="button"
@@ -843,24 +858,24 @@ function PromptAttachmentArea({
             </button>
           ) : null}
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
           {referenceImages.map((img, index) => (
             <MediaPreviewChip
               key={index}
-              label={`Reference ${index + 1}`}
+              label={contentType === 'audio' ? `Ingredient ${index + 1}` : `Reference ${index + 1}`}
               frame={img}
               onUpload={() => {}}
               onClear={() => onReferenceClear(index)}
             />
           ))}
           {canAddMore ? (
-             <button
-               type="button"
-               onClick={onReferenceUpload}
-               className="relative flex h-[4.25rem] w-[4.25rem] items-center justify-center overflow-hidden rounded-[1rem] border border-dashed border-border-subtle bg-bg-elevated/30 text-text-muted transition-all hover:border-border-focus hover:bg-bg-hover"
-             >
-               <Plus className="h-5 w-5" />
-             </button>
+            <button
+              type="button"
+              onClick={onReferenceUpload}
+              className="relative flex h-[4.25rem] w-[4.25rem] shrink-0 items-center justify-center overflow-hidden rounded-[1rem] border border-dashed border-border-subtle bg-bg-elevated/30 text-text-muted transition-all hover:border-border-focus hover:bg-bg-hover"
+            >
+              <Plus className="h-5 w-5" />
+            </button>
           ) : null}
         </div>
       </div>
@@ -1123,7 +1138,11 @@ function SelectedOptionsDisplay({
     }
   })
 
-  if (activeModeDescriptor && selectedModelDescriptor.modes && selectedModelDescriptor.modes.length > 0) {
+  if (
+    activeModeDescriptor &&
+    selectedModelDescriptor.modes &&
+    selectedModelDescriptor.modes.length > 0
+  ) {
     items.push({
       label: activeModeDescriptor.label,
       onClick: () => {

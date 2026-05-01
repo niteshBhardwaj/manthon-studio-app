@@ -46,10 +46,14 @@ export function HistoryPage() {
 
   const typeIcon = (type: string) => {
     switch (type) {
-      case 'video': return <Video className="w-3.5 h-3.5" />
-      case 'image': return <ImageIcon className="w-3.5 h-3.5" />
-      case 'audio': return <Music className="w-3.5 h-3.5" />
-      default: return <Clock className="w-3.5 h-3.5" />
+      case 'video':
+        return <Video className="w-3.5 h-3.5" />
+      case 'image':
+        return <ImageIcon className="w-3.5 h-3.5" />
+      case 'audio':
+        return <Music className="w-3.5 h-3.5" />
+      default:
+        return <Clock className="w-3.5 h-3.5" />
     }
   }
 
@@ -103,7 +107,9 @@ export function HistoryPage() {
               onClick={() => setFilter(f)}
               className={cn(
                 'px-2.5 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wider transition-all',
-                filter === f ? 'bg-accent-soft text-accent' : 'text-text-muted hover:text-text-secondary'
+                filter === f
+                  ? 'bg-accent-soft text-accent'
+                  : 'text-text-muted hover:text-text-secondary'
               )}
             >
               {f}
@@ -134,12 +140,16 @@ export function HistoryPage() {
               className="group flex items-center gap-3 p-3 rounded-xl bg-bg-elevated/50 border border-border-subtle hover:border-border hover:bg-bg-elevated transition-all cursor-pointer"
             >
               {/* Type icon */}
-              <div className={cn(
-                'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0',
-                item.type === 'video' ? 'bg-blue-500/10 text-blue-400' :
-                item.type === 'image' ? 'bg-amber-500/10 text-amber-400' :
-                'bg-emerald-500/10 text-emerald-400'
-              )}>
+              <div
+                className={cn(
+                  'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0',
+                  item.type === 'video'
+                    ? 'bg-blue-500/10 text-blue-400'
+                    : item.type === 'image'
+                      ? 'bg-amber-500/10 text-amber-400'
+                      : 'bg-emerald-500/10 text-emerald-400'
+                )}
+              >
                 {typeIcon(item.type)}
               </div>
 
@@ -154,12 +164,16 @@ export function HistoryPage() {
               </div>
 
               {/* Status */}
-              <span className={cn(
-                'text-[10px] px-2 py-0.5 rounded-full font-medium',
-                item.status === 'completed' ? 'bg-success/10 text-success' :
-                item.status === 'failed' ? 'bg-error/10 text-error' :
-                'bg-warning/10 text-warning'
-              )}>
+              <span
+                className={cn(
+                  'text-[10px] px-2 py-0.5 rounded-full font-medium',
+                  item.status === 'completed'
+                    ? 'bg-success/10 text-success'
+                    : item.status === 'failed'
+                      ? 'bg-error/10 text-error'
+                      : 'bg-warning/10 text-warning'
+                )}
+              >
                 {item.status}
               </span>
 
