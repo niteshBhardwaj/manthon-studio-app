@@ -1,13 +1,35 @@
 // ============================================================
-// Manthan Studio — Media Grid & Cards
+// Manthan Studio - Media Grid & Cards
 // Output display for generated media (video, image, audio)
+// ============================================================
+
+import { type JSX } from 'react'
 import { useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { Play, Download, Copy, Video, Image as ImageIcon, Music, Trash2 } from 'lucide-react'
-import { useGenerationStore, GenerationJob } from '../../stores/generation-store'
+import { useGenerationStore, type GenerationJob } from '../../stores/generation-store'
 import { cn } from '../../lib/utils'
 
-function MediaCard({ job }: { job: GenerationJob }) {
+function formatJobConfig(job: GenerationJob): string {
+  const parts: string[] = []
+  const values = job.config.capabilityValues
+
+  const aspectRatio = values.aspect_ratio
+  if (typeof aspectRatio === 'string' && aspectRatio) parts.push(aspectRatio)
+
+  const resolution = values.resolution
+  if (typeof resolution === 'string' && resolution) parts.push(resolution.toUpperCase())
+
+  const duration = values.duration
+  if (typeof duration === 'number') parts.push(`${duration}s`)
+
+  const batchCount = job.config.batchCount
+  if (batchCount > 1) parts.push(`x${batchCount}`)
+
+  return parts.join(' · ')
+}
+
+function MediaCard({ job }: { job: GenerationJob }): JSX.Element {
   const { removeJob } = useGenerationStore()
   const isGenerating = job.status === 'generating'
   const isCompleted = job.status === 'completed'
@@ -22,24 +44,48 @@ function MediaCard({ job }: { job: GenerationJob }) {
     }
   }, [job])
 
-  const typeIcon = job.type === 'video' ? <Video className="w-3 h-3" />
-    : job.type === 'audio' ? <Music className="w-3 h-3" />
-    : <ImageIcon className="w-3 h-3" />
+  const typeIcon =
+    job.type === 'video' ? (
+      <Video className="h-3 w-3" />
+    ) : job.type === 'audio' ? (
+      <Music className="h-3 w-3" />
+    ) : (
+      <ImageIcon className="h-3 w-3" />
+    )
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className="group relative rounded-xl overflow-hidden bg-bg-elevated border border-border-subtle
-                 hover:border-border transition-all"
+      className="group relative overflow-hidden rounded-xl border border-border-subtle bg-bg-elevated transition-all hover:border-border"
     >
-      {/* Preview area */}
-      <div className={cn('relative overflow-hidden', job.type === 'audio' ? 'h-28' : 'aspect-video')} style={{ background: 'var(--color-bg-primary)' }}>
+      <div
+        className={cn('relative overflow-hidden', job.type === 'audio' ? 'h-28' : 'aspect-video')}
+        style={{ background: 'var(--color-bg-primary)' }}
+      >
         {isGenerating && (
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
-            <div className="w-8 h-8 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.75rem'
+            }}
+          >
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
             <span className="text-xs text-text-muted">Generating...</span>
-            <div style={{ width: '8rem', height: '4px', borderRadius: '9999px', overflow: 'hidden', background: 'var(--color-bg-elevated)' }}>
+            <div
+              style={{
+                width: '8rem',
+                height: '4px',
+                borderRadius: '9999px',
+                overflow: 'hidden',
+                background: 'var(--color-bg-elevated)'
+              }}
+            >
               <motion.div
                 className="bg-accent"
                 style={{ height: '100%', borderRadius: '9999px' }}
@@ -55,17 +101,31 @@ function MediaCard({ job }: { job: GenerationJob }) {
             {job.type === 'video' ? (
               <video
                 src={job.result.uri || `data:${job.result.mimeType};base64,${job.result.data}`}
-                className="w-full h-full"
+                className="h-full w-full"
                 style={{ objectFit: 'cover' }}
                 muted
                 loop
-                onMouseEnter={(e) => (e.target as HTMLVideoElement).play()}
-                onMouseLeave={(e) => { const v = e.target as HTMLVideoElement; v.pause(); v.currentTime = 0 }}
+                onMouseEnter={(event) => (event.target as HTMLVideoElement).play()}
+                onMouseLeave={(event) => {
+                  const video = event.target as HTMLVideoElement
+                  video.pause()
+                  video.currentTime = 0
+                }}
               />
             ) : job.type === 'audio' ? (
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center">
-                  <Music className="w-5 h-5 text-emerald-400" />
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem'
+                }}
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/10">
+                  <Music className="h-5 w-5 text-emerald-400" />
                 </div>
                 <audio
                   controls
@@ -77,18 +137,35 @@ function MediaCard({ job }: { job: GenerationJob }) {
               <img
                 src={`data:${job.result.mimeType};base64,${job.result.data}`}
                 alt={job.prompt}
-                className="w-full h-full"
+                className="h-full w-full"
                 style={{ objectFit: 'cover' }}
               />
             )}
-            {/* Hover overlay (video/image only) */}
+
             {job.type !== 'audio' && (
               <div
-                className="opacity-0 group-hover:opacity-100 transition-opacity"
-                style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                className="opacity-0 transition-opacity group-hover:opacity-100"
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  background: 'rgba(0,0,0,0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
               >
-                <div className="rounded-full backdrop-blur" style={{ width: '3rem', height: '3rem', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Play className="w-5 h-5 text-white" style={{ marginLeft: '2px' }} />
+                <div
+                  className="rounded-full backdrop-blur"
+                  style={{
+                    width: '3rem',
+                    height: '3rem',
+                    background: 'rgba(255,255,255,0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  <Play className="h-5 w-5 text-white" style={{ marginLeft: '2px' }} />
                 </div>
               </div>
             )}
@@ -96,62 +173,135 @@ function MediaCard({ job }: { job: GenerationJob }) {
         )}
 
         {isFailed && (
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-            <div className="w-8 h-8 rounded-full bg-error/10 flex items-center justify-center">
-              <span className="text-error text-lg">!</span>
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem'
+            }}
+          >
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-error/10">
+              <span className="text-lg text-error">!</span>
             </div>
             <span className="text-xs text-error">{job.error || 'Generation failed'}</span>
           </div>
         )}
 
-        {/* Type badge */}
         <div style={{ position: 'absolute', top: '0.5rem', left: '0.5rem' }}>
-          <div className="backdrop-blur text-white/80" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', padding: '0.125rem 0.5rem', borderRadius: '0.375rem', background: 'rgba(0,0,0,0.4)', fontSize: '10px' }}>
+          <div
+            className="backdrop-blur text-white/80"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.25rem',
+              padding: '0.125rem 0.5rem',
+              borderRadius: '0.375rem',
+              background: 'rgba(0,0,0,0.4)',
+              fontSize: '10px'
+            }}
+          >
             {typeIcon}
             {job.type}
           </div>
         </div>
 
-        {/* Duration badge (video only) */}
         {job.type === 'video' && (
-          <div className="backdrop-blur text-white/80" style={{ position: 'absolute', bottom: '0.5rem', right: '0.5rem', padding: '0.125rem 0.375rem', borderRadius: '0.25rem', background: 'rgba(0,0,0,0.5)', fontSize: '10px' }}>
-            {job.config.duration || 8}s
+          <div
+            className="backdrop-blur text-white/80"
+            style={{
+              position: 'absolute',
+              bottom: '0.5rem',
+              right: '0.5rem',
+              padding: '0.125rem 0.375rem',
+              borderRadius: '0.25rem',
+              background: 'rgba(0,0,0,0.5)',
+              fontSize: '10px'
+            }}
+          >
+            {typeof job.config.capabilityValues.duration === 'number'
+              ? job.config.capabilityValues.duration
+              : 8}
+            s
           </div>
         )}
       </div>
 
-      {/* Info bar */}
       <div style={{ padding: '0.75rem' }}>
-        <p className="text-xs text-text-secondary" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: 1.6 }}>
+        <p
+          className="text-xs text-text-secondary"
+          style={{
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+            lineHeight: 1.6
+          }}
+        >
           {job.prompt}
         </p>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.5rem' }}>
-          <span className="text-text-muted" style={{ fontSize: '10px' }}>{job.config.aspectRatio} · {job.config.resolution}</span>
-          {/* Actions */}
-          <div className="opacity-0 group-hover:opacity-100 transition-opacity" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginTop: '0.5rem'
+          }}
+        >
+          <span className="text-text-muted" style={{ fontSize: '10px' }}>
+            {formatJobConfig(job)}
+          </span>
+          <div
+            className="opacity-0 transition-opacity group-hover:opacity-100"
+            style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+          >
             {isCompleted && (
               <>
                 <button
                   onClick={handleDownload}
-                  className="text-text-muted hover:text-text-secondary hover:bg-bg-hover transition-all"
-                  style={{ width: '24px', height: '24px', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  className="text-text-muted transition-all hover:bg-bg-hover hover:text-text-secondary"
+                  style={{
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
                 >
-                  <Download className="w-3.5 h-3.5" />
+                  <Download className="h-3.5 w-3.5" />
                 </button>
                 <button
-                  className="text-text-muted hover:text-text-secondary hover:bg-bg-hover transition-all"
-                  style={{ width: '24px', height: '24px', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  className="text-text-muted transition-all hover:bg-bg-hover hover:text-text-secondary"
+                  style={{
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
                 >
-                  <Copy className="w-3.5 h-3.5" />
+                  <Copy className="h-3.5 w-3.5" />
                 </button>
               </>
             )}
             <button
               onClick={() => removeJob(job.id)}
-              className="text-text-muted hover:text-error hover:bg-error/5 transition-all"
-              style={{ width: '24px', height: '24px', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              className="text-text-muted transition-all hover:bg-error/5 hover:text-error"
+              style={{
+                width: '24px',
+                height: '24px',
+                borderRadius: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>
@@ -160,13 +310,20 @@ function MediaCard({ job }: { job: GenerationJob }) {
   )
 }
 
-export function MediaGrid() {
+export function MediaGrid(): JSX.Element | null {
   const { jobs } = useGenerationStore()
 
   if (jobs.length === 0) return null
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem', padding: '1.5rem' }}>
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+        gap: '1rem',
+        padding: '1.5rem'
+      }}
+    >
       {jobs.map((job) => (
         <MediaCard key={job.id} job={job} />
       ))}

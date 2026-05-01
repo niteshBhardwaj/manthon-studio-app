@@ -4,11 +4,19 @@
 // ============================================================
 
 import { create } from 'zustand'
+import {
+  getDefaultCapabilityValues,
+  getDefaultModel,
+  getModelById,
+  type CapabilityValue,
+  type ContentType
+} from '../lib/model-capabilities'
 
 export type GenerationStatus = 'idle' | 'queued' | 'generating' | 'completed' | 'failed'
-export type GenerationType = 'video' | 'image' | 'audio'
-export type AspectRatio = '16:9' | '9:16' | '1:1'
-export type Resolution = '720p' | '1080p' | '4k'
+export type GenerationType = ContentType
+export type BinaryInput = { data: string; mimeType: string }
+
+const defaultImageModel = getDefaultModel('image')
 
 export interface GenerationJob {
   id: string
@@ -19,15 +27,15 @@ export interface GenerationJob {
   provider: string
   model: string
   config: {
-    aspectRatio: AspectRatio
-    resolution: Resolution
-    duration?: number
-    enableAudio?: boolean
+    contentType: ContentType
+    activeMode: string | null
+    batchCount: number
+    capabilityValues: Record<string, CapabilityValue>
   }
   // Inputs
-  image?: { data: string; mimeType: string }
-  lastFrame?: { data: string; mimeType: string }
-  referenceImages?: Array<{ data: string; mimeType: string }>
+  image?: BinaryInput
+  lastFrame?: BinaryInput
+  referenceImages?: Array<BinaryInput>
   // Result
   result?: {
     type: GenerationType
@@ -45,16 +53,16 @@ interface GenerationState {
   // Current prompt state
   prompt: string
   negativePrompt: string
-  aspectRatio: AspectRatio
-  resolution: Resolution
-  duration: number
-  enableAudio: boolean
+  contentType: ContentType
+  capabilityValues: Record<string, CapabilityValue>
+  activeMode: string | null
+  batchCount: number
   selectedModel: string
 
   // Frame inputs
-  startFrame: { data: string; mimeType: string } | null
-  endFrame: { data: string; mimeType: string } | null
-  referenceImages: Array<{ data: string; mimeType: string }>
+  startFrame: BinaryInput | null
+  endFrame: BinaryInput | null
+  referenceImages: Array<BinaryInput>
 
   // Jobs
   jobs: GenerationJob[]
@@ -62,25 +70,23 @@ interface GenerationState {
 
   // Panel state
   panelExpanded: boolean
-  generationMode: 'text' | 'image' | 'frames' | 'extend'
 
   // Actions
   setPrompt: (prompt: string) => void
   setNegativePrompt: (prompt: string) => void
-  setAspectRatio: (ratio: AspectRatio) => void
-  setResolution: (res: Resolution) => void
-  setDuration: (duration: number) => void
-  setEnableAudio: (enabled: boolean) => void
+  setContentType: (type: ContentType, enabledModelIds?: Iterable<string>) => void
+  setCapabilityValue: (key: string, value: CapabilityValue) => void
+  setActiveMode: (mode: string | null) => void
+  setBatchCount: (batchCount: number) => void
   setSelectedModel: (model: string) => void
 
-  setStartFrame: (frame: { data: string; mimeType: string } | null) => void
-  setEndFrame: (frame: { data: string; mimeType: string } | null) => void
-  addReferenceImage: (img: { data: string; mimeType: string }) => void
+  setStartFrame: (frame: BinaryInput | null) => void
+  setEndFrame: (frame: BinaryInput | null) => void
+  addReferenceImage: (img: BinaryInput) => void
   removeReferenceImage: (index: number) => void
   clearReferenceImages: () => void
 
   setPanelExpanded: (expanded: boolean) => void
-  setGenerationMode: (mode: 'text' | 'image' | 'frames' | 'extend') => void
 
   addJob: (job: GenerationJob) => void
   updateJob: (id: string, updates: Partial<GenerationJob>) => void
@@ -93,11 +99,14 @@ export const useGenerationStore = create<GenerationState>((set) => ({
   // Current prompt state
   prompt: '',
   negativePrompt: '',
-  aspectRatio: '16:9',
-  resolution: '1080p',
-  duration: 8,
-  enableAudio: true,
-  selectedModel: 'veo-3.1-generate-preview',
+  contentType: defaultImageModel?.contentType ?? 'image',
+  capabilityValues: defaultImageModel ? getDefaultCapabilityValues(defaultImageModel) : {},
+  activeMode: defaultImageModel?.modes?.[0]?.id ?? null,
+  batchCount: Number(
+    getDefaultCapabilityValues(defaultImageModel ?? getModelById('gemini-3-pro-image-preview')!)
+      .batch_count ?? 1
+  ),
+  selectedModel: defaultImageModel?.id ?? 'gemini-3-pro-image-preview',
 
   // Frame inputs
   startFrame: null,
@@ -110,22 +119,80 @@ export const useGenerationStore = create<GenerationState>((set) => ({
 
   // Panel state
   panelExpanded: false,
-  generationMode: 'text',
 
   // Actions
   setPrompt: (prompt) => set({ prompt }),
   setNegativePrompt: (prompt) => set({ negativePrompt: prompt }),
-  setAspectRatio: (ratio) => set({ aspectRatio: ratio }),
-  setResolution: (res) => set({ resolution: res }),
-  setDuration: (duration) => set({ duration }),
-  setEnableAudio: (enabled) => set({ enableAudio: enabled }),
-  setSelectedModel: (model) => set({ selectedModel: model }),
+  setContentType: (contentType, enabledModelIds) =>
+    set((state) => {
+      const model = getDefaultModel(contentType, enabledModelIds) ?? getDefaultModel(contentType)
+      if (!model) return { contentType }
+
+      const nextCapabilityValues = getDefaultCapabilityValues(model)
+      const batchCount = Number(nextCapabilityValues.batch_count ?? 1)
+
+      return {
+        ...state,
+        contentType,
+        selectedModel: model.id,
+        capabilityValues: nextCapabilityValues,
+        activeMode: model.modes?.[0]?.id ?? null,
+        batchCount
+      }
+    }),
+  setCapabilityValue: (key, value) =>
+    set((state) => ({
+      capabilityValues: {
+        ...state.capabilityValues,
+        [key]: value
+      }
+    })),
+  setActiveMode: (activeMode) => set({ activeMode }),
+  setBatchCount: (batchCount) =>
+    set((state) => ({
+      batchCount,
+      capabilityValues: {
+        ...state.capabilityValues,
+        batch_count: batchCount
+      }
+    })),
+  setSelectedModel: (modelId) =>
+    set((state) => {
+      const model = getModelById(modelId)
+      if (!model) return state
+
+      const nextCapabilityValues = {
+        ...getDefaultCapabilityValues(model),
+        ...Object.fromEntries(
+          Object.entries(state.capabilityValues).filter(([key]) =>
+            [
+              ...model.capabilities,
+              ...(model.modes?.flatMap((mode) => mode.capabilities) ?? [])
+            ].some((capability) => capability.type === key)
+          )
+        )
+      }
+
+      const batchCount = Number(nextCapabilityValues.batch_count ?? 1)
+
+      return {
+        ...state,
+        contentType: model.contentType,
+        selectedModel: model.id,
+        capabilityValues: nextCapabilityValues,
+        activeMode: model.modes?.some((mode) => mode.id === state.activeMode)
+          ? state.activeMode
+          : (model.modes?.[0]?.id ?? null),
+        batchCount
+      }
+    }),
 
   setStartFrame: (frame) => set({ startFrame: frame }),
   setEndFrame: (frame) => set({ endFrame: frame }),
   addReferenceImage: (img) =>
     set((s) => ({
-      referenceImages: s.referenceImages.length < 3 ? [...s.referenceImages, img] : s.referenceImages
+      referenceImages:
+        s.referenceImages.length < 3 ? [...s.referenceImages, img] : s.referenceImages
     })),
   removeReferenceImage: (index) =>
     set((s) => ({
@@ -134,7 +201,6 @@ export const useGenerationStore = create<GenerationState>((set) => ({
   clearReferenceImages: () => set({ referenceImages: [] }),
 
   setPanelExpanded: (expanded) => set({ panelExpanded: expanded }),
-  setGenerationMode: (mode) => set({ generationMode: mode }),
 
   addJob: (job) => set((s) => ({ jobs: [job, ...s.jobs], activeJobId: job.id })),
   updateJob: (id, updates) =>

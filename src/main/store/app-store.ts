@@ -5,6 +5,7 @@
 
 import { JsonStore } from './json-store'
 import { GenerationOperation } from '../providers/base'
+import { MODEL_REGISTRY } from '../../shared/model-registry'
 
 interface AppStoreSchema extends Record<string, unknown> {
   history: GenerationOperation[]
@@ -14,6 +15,7 @@ interface AppStoreSchema extends Record<string, unknown> {
     defaultProvider: string | null
     defaultAspectRatio: string
     defaultResolution: string
+    enabledModels: string[]
   }
   templates: Array<{ id: string; name: string; prompt: string; category: string }>
 }
@@ -25,14 +27,45 @@ const store = new JsonStore<AppStoreSchema>('manthan-app', {
     sidebarCollapsed: false,
     defaultProvider: null,
     defaultAspectRatio: '16:9',
-    defaultResolution: '1080p'
+    defaultResolution: '1080p',
+    enabledModels: MODEL_REGISTRY.map((model) => model.id)
   },
   templates: [
-    { id: 'cinematic', name: 'Cinematic', prompt: 'A cinematic shot with dramatic lighting, shallow depth of field, anamorphic lens flare, film grain, professional color grading.', category: 'style' },
-    { id: 'dialogue', name: 'Dialogue Scene', prompt: "A close-up conversation scene between two people. Natural lighting, intimate framing, clear dialogue with subtle ambient sound.", category: 'scene' },
-    { id: 'realism', name: 'Photorealism', prompt: 'Ultra-realistic, photorealistic quality, natural lighting, no artifacts, no distortion, professional photography style.', category: 'style' },
-    { id: 'product-ad', name: 'Product Ad', prompt: 'Professional product advertisement. Clean white background, studio lighting, smooth camera movement, premium feel.', category: 'commercial' },
-    { id: 'storytelling', name: 'Storytelling', prompt: 'A narrative sequence with emotional depth, character-driven action, atmospheric soundtrack, cinematic pacing.', category: 'narrative' }
+    {
+      id: 'cinematic',
+      name: 'Cinematic',
+      prompt:
+        'A cinematic shot with dramatic lighting, shallow depth of field, anamorphic lens flare, film grain, professional color grading.',
+      category: 'style'
+    },
+    {
+      id: 'dialogue',
+      name: 'Dialogue Scene',
+      prompt:
+        'A close-up conversation scene between two people. Natural lighting, intimate framing, clear dialogue with subtle ambient sound.',
+      category: 'scene'
+    },
+    {
+      id: 'realism',
+      name: 'Photorealism',
+      prompt:
+        'Ultra-realistic, photorealistic quality, natural lighting, no artifacts, no distortion, professional photography style.',
+      category: 'style'
+    },
+    {
+      id: 'product-ad',
+      name: 'Product Ad',
+      prompt:
+        'Professional product advertisement. Clean white background, studio lighting, smooth camera movement, premium feel.',
+      category: 'commercial'
+    },
+    {
+      id: 'storytelling',
+      name: 'Storytelling',
+      prompt:
+        'A narrative sequence with emotional depth, character-driven action, atmospheric soundtrack, cinematic pacing.',
+      category: 'narrative'
+    }
   ]
 })
 
@@ -46,9 +79,45 @@ export const appStore = {
   getHistory: () => store.get('history'),
   clearHistory: () => store.set('history', []),
   getPreferences: () => store.get('preferences'),
-  setPreference<K extends keyof AppStoreSchema['preferences']>(key: K, value: AppStoreSchema['preferences'][K]): void {
+  setPreference<K extends keyof AppStoreSchema['preferences']>(
+    key: K,
+    value: AppStoreSchema['preferences'][K]
+  ): void {
     const prefs = store.get('preferences')
     prefs[key] = value
+    store.set('preferences', prefs)
+  },
+  getEnabledModels(): string[] {
+    const prefs = store.get('preferences')
+    const fallback = MODEL_REGISTRY.map((model) => model.id)
+
+    if (!Array.isArray(prefs.enabledModels) || prefs.enabledModels.length === 0) {
+      prefs.enabledModels = fallback
+      store.set('preferences', prefs)
+      return fallback
+    }
+
+    const validIds = new Set(MODEL_REGISTRY.map((model) => model.id))
+    const filtered = prefs.enabledModels.filter((id) => validIds.has(id))
+    if (filtered.length === 0) {
+      prefs.enabledModels = fallback
+      store.set('preferences', prefs)
+      return fallback
+    }
+
+    if (filtered.length !== prefs.enabledModels.length) {
+      prefs.enabledModels = filtered
+      store.set('preferences', prefs)
+    }
+
+    return filtered
+  },
+  setEnabledModels(ids: string[]): void {
+    const prefs = store.get('preferences')
+    const validIds = new Set(MODEL_REGISTRY.map((model) => model.id))
+    const filtered = ids.filter((id) => validIds.has(id))
+
+    prefs.enabledModels = filtered.length > 0 ? filtered : MODEL_REGISTRY.map((model) => model.id)
     store.set('preferences', prefs)
   },
   getTemplates: () => store.get('templates'),

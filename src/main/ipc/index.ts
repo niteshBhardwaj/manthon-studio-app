@@ -17,7 +17,12 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('api-key:save', async (_event, provider: string, apiKey: string) => {
     try {
       keyStore.saveApiKey(provider, apiKey)
-      await providerRegistry.initializeProvider(provider, apiKey)
+      const group = keyStore.getProviderGroupMapping()[provider]
+      if (group) {
+        await providerRegistry.initializeGroup(group, apiKey)
+      } else {
+        await providerRegistry.initializeProvider(provider, apiKey)
+      }
       return { success: true }
     } catch (error: unknown) {
       return { success: false, error: error instanceof Error ? error.message : 'Save failed' }
@@ -57,6 +62,40 @@ export function registerIpcHandlers(): void {
     return { success: true }
   })
 
+  ipcMain.handle('api-key:save-group', async (_event, group: string, apiKey: string) => {
+    try {
+      keyStore.saveGroupKey(group, apiKey)
+      await providerRegistry.initializeGroup(group, apiKey)
+      return { success: true }
+    } catch (error: unknown) {
+      return { success: false, error: error instanceof Error ? error.message : 'Save failed' }
+    }
+  })
+
+  ipcMain.handle('api-key:test-group', async (_event, group: string, apiKey: string) => {
+    try {
+      const mapping = providerRegistry.getGroupMapping()
+      const providerId = Object.keys(mapping).find((id) => mapping[id] === group)
+
+      if (!providerId) {
+        return { connected: false, message: 'Provider group not found' }
+      }
+
+      const provider = providerRegistry.get(providerId)
+      if (!provider) {
+        return { connected: false, message: 'Provider not found' }
+      }
+
+      await provider.initialize(apiKey)
+      return provider.testConnection()
+    } catch (error: unknown) {
+      return {
+        connected: false,
+        message: error instanceof Error ? error.message : 'Test failed'
+      }
+    }
+  })
+
   // ── Provider Management ─────────────────────────────────
   ipcMain.handle('provider:list', async () => {
     return providerRegistry.getProviderList()
@@ -76,6 +115,15 @@ export function registerIpcHandlers(): void {
     const provider = providerRegistry.get(providerId)
     if (!provider) return null
     return provider.config
+  })
+
+  ipcMain.handle('models:get-enabled', async () => {
+    return appStore.getEnabledModels()
+  })
+
+  ipcMain.handle('models:set-enabled', async (_event, ids: string[]) => {
+    appStore.setEnabledModels(ids)
+    return { success: true }
   })
 
   // ── Generation ──────────────────────────────────────────
@@ -152,19 +200,16 @@ export function registerIpcHandlers(): void {
   })
 
   // ── File System ─────────────────────────────────────────
-  ipcMain.handle(
-    'file:save',
-    async (_event, data: string, filename: string, _mimeType: string) => {
-      const mediaDir = join(app.getPath('userData'), 'media')
-      await mkdir(mediaDir, { recursive: true })
+  ipcMain.handle('file:save', async (_event, data: string, filename: string) => {
+    const mediaDir = join(app.getPath('userData'), 'media')
+    await mkdir(mediaDir, { recursive: true })
 
-      const filePath = join(mediaDir, filename)
-      const buffer = Buffer.from(data, 'base64')
-      await writeFile(filePath, buffer)
+    const filePath = join(mediaDir, filename)
+    const buffer = Buffer.from(data, 'base64')
+    await writeFile(filePath, buffer)
 
-      return { path: filePath }
-    }
-  )
+    return { path: filePath }
+  })
 
   ipcMain.handle('file:open', async () => {
     const result = await dialog.showOpenDialog({
@@ -247,16 +292,45 @@ async function pollInBackground(sender: Electron.WebContents, operationId: strin
 
 // Initialize providers with stored keys on startup
 export async function initializeStoredProviders(): Promise<void> {
+  const initializedProviders = new Set<string>()
+  const initializedGroups = new Set<string>()
+
+  for (const groupId of keyStore.getStoredGroupIds()) {
+    const apiKey = keyStore.getGroupKey(groupId)
+    if (!apiKey) continue
+
+    try {
+      await providerRegistry.initializeGroup(groupId, apiKey)
+      initializedGroups.add(groupId)
+      Object.entries(keyStore.getProviderGroupMapping()).forEach(([providerId, group]) => {
+        if (group === groupId) initializedProviders.add(providerId)
+      })
+    } catch {
+      console.warn(`Failed to initialize provider group ${groupId}`)
+    }
+  }
+
   const providerIds = keyStore.getAllProviderIds()
 
   for (const providerId of providerIds) {
-    const apiKey = keyStore.getApiKey(providerId)
-    if (apiKey) {
-      try {
+    if (initializedProviders.has(providerId)) continue
+
+    const mappedGroup = keyStore.getProviderGroupMapping()[providerId]
+    if (mappedGroup && initializedGroups.has(mappedGroup)) continue
+
+    const apiKey = keyStore.getApiKeyFromProviderSlot(providerId)
+    if (!apiKey) continue
+
+    try {
+      if (mappedGroup) {
+        await providerRegistry.initializeGroup(mappedGroup, apiKey)
+        initializedGroups.add(mappedGroup)
+      } else {
         await providerRegistry.initializeProvider(providerId, apiKey)
-      } catch {
-        console.warn(`Failed to initialize provider ${providerId}`)
       }
+      initializedProviders.add(providerId)
+    } catch {
+      console.warn(`Failed to initialize provider ${providerId}`)
     }
   }
 

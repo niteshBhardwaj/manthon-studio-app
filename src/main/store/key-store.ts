@@ -5,46 +5,67 @@
 
 import { safeStorage } from 'electron'
 import { JsonStore } from './json-store'
+import { KEY_GROUPS, PROVIDER_GROUP_MAPPING } from '../../shared/model-registry'
 
 interface KeyStoreSchema extends Record<string, unknown> {
   apiKeys: Record<string, string>
+  groupKeys: Record<string, string>
   activeProvider: string | null
 }
 
 const store = new JsonStore<KeyStoreSchema>('manthan-keys', {
   apiKeys: {},
+  groupKeys: {},
   activeProvider: null
 })
 
+function encodeKey(apiKey: string): string {
+  if (!safeStorage.isEncryptionAvailable()) {
+    return Buffer.from(apiKey).toString('base64')
+  }
+
+  const encrypted = safeStorage.encryptString(apiKey)
+  return encrypted.toString('base64')
+}
+
+function decodeKey(encoded: string): string | null {
+  if (!safeStorage.isEncryptionAvailable()) {
+    return Buffer.from(encoded, 'base64').toString('utf-8')
+  }
+
+  try {
+    const buffer = Buffer.from(encoded, 'base64')
+    return safeStorage.decryptString(buffer)
+  } catch {
+    return null
+  }
+}
+
 export const keyStore = {
   saveApiKey(provider: string, apiKey: string): void {
-    const keys = store.get('apiKeys')
-
-    if (!safeStorage.isEncryptionAvailable()) {
-      keys[provider] = Buffer.from(apiKey).toString('base64')
-    } else {
-      const encrypted = safeStorage.encryptString(apiKey)
-      keys[provider] = encrypted.toString('base64')
+    const group = PROVIDER_GROUP_MAPPING[provider]
+    if (group) {
+      this.saveGroupKey(group, apiKey)
+      return
     }
 
+    const keys = store.get('apiKeys')
+    keys[provider] = encodeKey(apiKey)
     store.set('apiKeys', keys)
   },
 
   getApiKey(provider: string): string | null {
+    const group = PROVIDER_GROUP_MAPPING[provider]
+    if (group) {
+      const groupKey = this.getGroupKey(group)
+      if (groupKey) return groupKey
+    }
+
     const keys = store.get('apiKeys')
     const encoded = keys[provider]
     if (!encoded) return null
 
-    if (!safeStorage.isEncryptionAvailable()) {
-      return Buffer.from(encoded, 'base64').toString('utf-8')
-    }
-
-    try {
-      const buffer = Buffer.from(encoded, 'base64')
-      return safeStorage.decryptString(buffer)
-    } catch {
-      return null
-    }
+    return decodeKey(encoded)
   },
 
   removeApiKey(provider: string): void {
@@ -54,12 +75,75 @@ export const keyStore = {
   },
 
   hasApiKey(provider: string): boolean {
+    const group = PROVIDER_GROUP_MAPPING[provider]
+    if (group && this.hasGroupKey(group)) return true
+
     const keys = store.get('apiKeys')
     return !!keys[provider]
   },
 
   getAllProviderIds(): string[] {
     return Object.keys(store.get('apiKeys'))
+  },
+
+  saveGroupKey(group: string, apiKey: string): void {
+    const groupKeys = store.get('groupKeys')
+    groupKeys[group] = encodeKey(apiKey)
+    store.set('groupKeys', groupKeys)
+
+    // Keep provider slots warm for legacy reads and older code paths.
+    const matchingProviders = KEY_GROUPS.find((entry) => entry.id === group)?.providerIds ?? []
+    const keys = store.get('apiKeys')
+    matchingProviders.forEach((providerId) => {
+      keys[providerId] = groupKeys[group]
+    })
+    store.set('apiKeys', keys)
+  },
+
+  getGroupKey(group: string): string | null {
+    const groupKeys = store.get('groupKeys')
+    const encoded = groupKeys[group]
+    if (encoded) {
+      return decodeKey(encoded)
+    }
+
+    // Backward-compatible migration path: hydrate the group key from any stored provider key.
+    const matchingProviders = KEY_GROUPS.find((entry) => entry.id === group)?.providerIds ?? []
+    for (const providerId of matchingProviders) {
+      const providerKey = this.getApiKeyFromProviderSlot(providerId)
+      if (providerKey) {
+        this.saveGroupKey(group, providerKey)
+        return providerKey
+      }
+    }
+
+    return null
+  },
+
+  getApiKeyFromProviderSlot(provider: string): string | null {
+    const keys = store.get('apiKeys')
+    const encoded = keys[provider]
+    if (!encoded) return null
+    return decodeKey(encoded)
+  },
+
+  removeGroupKey(group: string): void {
+    const groupKeys = store.get('groupKeys')
+    delete groupKeys[group]
+    store.set('groupKeys', groupKeys)
+  },
+
+  hasGroupKey(group: string): boolean {
+    const groupKeys = store.get('groupKeys')
+    return !!groupKeys[group]
+  },
+
+  getStoredGroupIds(): string[] {
+    return Object.keys(store.get('groupKeys'))
+  },
+
+  getProviderGroupMapping(): Record<string, string> {
+    return { ...PROVIDER_GROUP_MAPPING }
   },
 
   setActiveProvider(provider: string | null): void {

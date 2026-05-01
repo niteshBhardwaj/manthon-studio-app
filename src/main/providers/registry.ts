@@ -7,6 +7,7 @@ import { MediaProvider, ConnectionStatus } from './base'
 import { GoogleVeoProvider } from './google-veo'
 import { GoogleImagenProvider } from './google-imagen'
 import { GoogleLyriaProvider } from './google-lyria'
+import { KEY_GROUPS, PROVIDER_GROUP_MAPPING } from '../../shared/model-registry'
 
 class ProviderRegistry {
   private providers: Map<string, MediaProvider> = new Map()
@@ -69,10 +70,24 @@ class ProviderRegistry {
     await provider.initialize(apiKey)
   }
 
+  async initializeGroup(group: string, apiKey: string): Promise<void> {
+    const providerIds = KEY_GROUPS.find((entry) => entry.id === group)?.providerIds ?? []
+
+    if (providerIds.length === 0) {
+      throw new Error(`Provider group ${group} not found`)
+    }
+
+    await Promise.all(providerIds.map((providerId) => this.initializeProvider(providerId, apiKey)))
+  }
+
   async testProvider(id: string): Promise<ConnectionStatus> {
     const provider = this.providers.get(id)
     if (!provider) throw new Error(`Provider ${id} not found`)
     return provider.testConnection()
+  }
+
+  getGroupMapping(): Record<string, string> {
+    return { ...PROVIDER_GROUP_MAPPING }
   }
 }
 

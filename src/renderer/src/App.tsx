@@ -2,17 +2,19 @@
 // Manthan Studio — App Root
 // ============================================================
 
-import { useEffect } from 'react'
+import { type JSX, useEffect } from 'react'
 import { AppShell } from './components/layout/AppShell'
 import { useProviderStore } from './stores/provider-store'
 import { useGenerationStore, GenerationJob } from './stores/generation-store'
+import { useModelStore } from './stores/model-store'
 
-function App() {
+function App(): JSX.Element {
   const { fetchProviders } = useProviderStore()
-  const { addJob, updateJob } = useGenerationStore()
+  const { updateJob } = useGenerationStore()
+  const { loadEnabledModels } = useModelStore()
 
   useEffect(() => {
-    fetchProviders()
+    void Promise.all([fetchProviders(), loadEnabledModels()])
 
     // Only subscribe to IPC events inside Electron
     if (typeof window !== 'undefined' && window.manthan) {
@@ -46,7 +48,7 @@ function App() {
       }
     }
     return undefined
-  }, [fetchProviders, addJob, updateJob])
+  }, [fetchProviders, loadEnabledModels, updateJob])
 
   return <AppShell />
 }

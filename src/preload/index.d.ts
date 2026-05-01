@@ -15,6 +15,11 @@ interface ManthanAPI {
     provider: string
   ) => Promise<{ connected: boolean; message: string; model?: string }>
   removeApiKey: (provider: string) => Promise<{ success: boolean }>
+  saveGroupKey: (group: string, key: string) => Promise<{ success: boolean; error?: string }>
+  testGroupKey: (
+    group: string,
+    key: string
+  ) => Promise<{ connected: boolean; message: string; model?: string }>
 
   // Providers
   getProviders: () => Promise<
@@ -28,9 +33,7 @@ interface ManthanAPI {
   >
   setActiveProvider: (id: string) => Promise<{ success: boolean }>
   getActiveProvider: () => Promise<string | null>
-  getProviderConfig: (
-    id: string
-  ) => Promise<{
+  getProviderConfig: (id: string) => Promise<{
     defaultModel: string
     models: Array<{
       id: string
@@ -43,6 +46,8 @@ interface ManthanAPI {
       supportedResolutions?: string[]
     }>
   } | null>
+  getEnabledModels: () => Promise<string[]>
+  setEnabledModels: (ids: string[]) => Promise<{ success: boolean }>
 
   // Generation
   generateVideo: (params: Record<string, unknown>) => Promise<Record<string, unknown>>
@@ -56,20 +61,14 @@ interface ManthanAPI {
   clearHistory: () => Promise<{ success: boolean }>
 
   // Templates
-  getTemplates: () => Promise<
-    Array<{ id: string; name: string; prompt: string; category: string }>
-  >
+  getTemplates: () => Promise<Array<{ id: string; name: string; prompt: string; category: string }>>
 
   // Preferences
   getPreferences: () => Promise<Record<string, unknown>>
   setPreference: (key: string, value: unknown) => Promise<{ success: boolean }>
 
   // Files
-  saveMedia: (
-    data: string,
-    filename: string,
-    mimeType: string
-  ) => Promise<{ path: string }>
+  saveMedia: (data: string, filename: string, mimeType: string) => Promise<{ path: string }>
   openFile: () => Promise<{
     path: string
     data: string

@@ -56,8 +56,30 @@ export const useProviderStore = create<ProviderState>((set) => ({
       if (typeof window === 'undefined' || !window.manthan) {
         set({
           providers: [
-            { id: 'google-veo', name: 'Google Veo 3.1', icon: 'video', modalities: ['video'], initialized: false, connectionStatus: 'unknown' },
-            { id: 'google-imagen', name: 'Nano Banana', icon: 'image', modalities: ['image'], initialized: false, connectionStatus: 'unknown' }
+            {
+              id: 'google-veo',
+              name: 'Google Veo 3.1',
+              icon: 'video',
+              modalities: ['video'],
+              initialized: false,
+              connectionStatus: 'unknown'
+            },
+            {
+              id: 'google-imagen',
+              name: 'Nano Banana',
+              icon: 'image',
+              modalities: ['image'],
+              initialized: false,
+              connectionStatus: 'unknown'
+            },
+            {
+              id: 'google-lyria',
+              name: 'Lyria 3',
+              icon: 'music',
+              modalities: ['audio'],
+              initialized: false,
+              connectionStatus: 'unknown'
+            }
           ],
           activeProviderId: null,
           loading: false
