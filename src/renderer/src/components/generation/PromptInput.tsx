@@ -420,7 +420,9 @@ export function PromptInput(): JSX.Element {
                         ) : selectedModelDescriptor?.id === 'lyria-3-pro-preview' ? (
                           <div className="rounded-lg bg-black/20 p-2.5 text-[10px] text-text-muted leading-relaxed border border-white/5 mt-1">
                             <div className="flex items-center justify-between">
-                              <span className="font-semibold text-text-secondary">Max Duration</span>
+                              <span className="font-semibold text-text-secondary">
+                                Max Duration
+                              </span>
                               <span>Up to 184s (~3m 4s)</span>
                             </div>
                             <div className="mt-1 text-text-muted/70">
