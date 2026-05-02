@@ -6,9 +6,17 @@
 import { type JSX } from 'react'
 import { useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { Play, Download, Copy, Video, Image as ImageIcon, Music, Trash2 } from 'lucide-react'
+import { Play, Download, Copy, Video, Image as ImageIcon, Music, Trash2, X } from 'lucide-react'
 import { useGenerationStore, type GenerationJob } from '../../stores/generation-store'
 import { cn } from '../../lib/utils'
+import { Tilt } from '../motion-primitives/tilt'
+import {
+  MorphingDialog,
+  MorphingDialogTrigger,
+  MorphingDialogContent,
+  MorphingDialogClose,
+  MorphingDialogContainer
+} from '../motion-primitives/morphing-dialog'
 
 function formatJobConfig(job: GenerationJob): string {
   const parts: string[] = []
@@ -57,12 +65,21 @@ function MediaCard({ job }: { job: GenerationJob }): JSX.Element {
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className="group relative overflow-hidden rounded-xl border border-border-subtle bg-bg-elevated transition-all hover:border-border"
     >
-      <div
-        className={cn('relative overflow-hidden', job.type === 'audio' ? 'h-28' : 'aspect-video')}
-        style={{ background: 'var(--color-bg-primary)' }}
+      <MorphingDialog
+        transition={{
+          type: 'spring',
+          bounce: 0.05,
+          duration: 0.25
+        }}
       >
+        <MorphingDialogTrigger className="block w-full text-left focus:outline-none">
+          <Tilt rotationFactor={8} isRevese>
+            <div className="group relative overflow-hidden rounded-xl border border-border-subtle bg-bg-elevated transition-all hover:border-border">
+              <div
+                className={cn('relative overflow-hidden', job.type === 'audio' ? 'h-28' : 'aspect-video')}
+                style={{ background: 'var(--color-bg-primary)' }}
+              >
         {isGenerating && (
           <div
             style={{
@@ -142,7 +159,7 @@ function MediaCard({ job }: { job: GenerationJob }): JSX.Element {
               />
             )}
 
-            {job.type !== 'audio' && (
+            {job.type === 'video' && (
               <div
                 className="opacity-0 transition-opacity group-hover:opacity-100"
                 style={{
@@ -187,7 +204,7 @@ function MediaCard({ job }: { job: GenerationJob }): JSX.Element {
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-error/10">
               <span className="text-lg text-error">!</span>
             </div>
-            <span className="text-xs text-error">{job.error || 'Generation failed'}</span>
+            <span className="text-xs text-error px-2">{job.error || 'Generation failed'}</span>
           </div>
         )}
 
@@ -261,7 +278,10 @@ function MediaCard({ job }: { job: GenerationJob }): JSX.Element {
             {isCompleted && (
               <>
                 <button
-                  onClick={handleDownload}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    void handleDownload()
+                  }}
                   className="text-text-muted transition-all hover:bg-bg-hover hover:text-text-secondary"
                   style={{
                     width: '24px',
@@ -275,6 +295,7 @@ function MediaCard({ job }: { job: GenerationJob }): JSX.Element {
                   <Download className="h-3.5 w-3.5" />
                 </button>
                 <button
+                  onClick={(e) => e.stopPropagation()}
                   className="text-text-muted transition-all hover:bg-bg-hover hover:text-text-secondary"
                   style={{
                     width: '24px',
@@ -290,7 +311,10 @@ function MediaCard({ job }: { job: GenerationJob }): JSX.Element {
               </>
             )}
             <button
-              onClick={() => removeJob(job.id)}
+              onClick={(e) => {
+                e.stopPropagation()
+                removeJob(job.id)
+              }}
               className="text-text-muted transition-all hover:bg-error/5 hover:text-error"
               style={{
                 width: '24px',
@@ -304,8 +328,42 @@ function MediaCard({ job }: { job: GenerationJob }): JSX.Element {
               <Trash2 className="h-3.5 w-3.5" />
             </button>
           </div>
+          </div>
         </div>
-      </div>
+            </div>
+          </Tilt>
+        </MorphingDialogTrigger>
+
+        {isCompleted && job.result && job.type !== 'audio' && (
+          <MorphingDialogContainer>
+            <MorphingDialogContent className="pointer-events-auto relative flex h-auto w-full flex-col overflow-hidden rounded-[24px] border border-border-subtle bg-bg-primary shadow-2xl sm:w-[800px]">
+              {job.type === 'video' ? (
+                <video
+                  src={job.result.uri || `data:${job.result.mimeType};base64,${job.result.data}`}
+                  className="w-full max-h-[75vh] object-contain bg-black/50"
+                  controls
+                  autoPlay
+                />
+              ) : (
+                <img
+                  src={`data:${job.result.mimeType};base64,${job.result.data}`}
+                  alt={job.prompt}
+                  className="w-full max-h-[75vh] object-contain bg-black/50"
+                />
+              )}
+              <div className="p-5 bg-bg-primary">
+                <p className="text-sm text-text-secondary">{job.prompt}</p>
+                <div className="mt-3 flex items-center gap-2 text-[11px] text-text-muted">
+                  <span className="capitalize">{job.provider}</span> • <span className="capitalize">{job.type}</span>
+                </div>
+              </div>
+              <MorphingDialogClose className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition-colors hover:bg-black/60 focus:outline-none">
+                <X className="h-4 w-4" />
+              </MorphingDialogClose>
+            </MorphingDialogContent>
+          </MorphingDialogContainer>
+        )}
+      </MorphingDialog>
     </motion.div>
   )
 }

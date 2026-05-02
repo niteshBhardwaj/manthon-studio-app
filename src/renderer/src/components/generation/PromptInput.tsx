@@ -36,6 +36,13 @@ import {
   type ModelDescriptor
 } from '../../lib/model-capabilities'
 import { cn } from '../../lib/utils'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select'
 
 type JobResult = GenerationJob['result']
 
@@ -53,7 +60,8 @@ function OptimizedTextArea({
   placeholder,
   onFocus,
   onBlur,
-  onKeyDown
+  onKeyDown,
+  hasAttachmentButton
 }: {
   initialPrompt: string
   onPromptChange: (val: string) => void
@@ -63,6 +71,7 @@ function OptimizedTextArea({
   onFocus: () => void
   onBlur: () => void
   onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
+  hasAttachmentButton: boolean
 }): JSX.Element {
   const [localPrompt, setLocalPrompt] = useState(initialPrompt)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -122,7 +131,7 @@ function OptimizedTextArea({
         'flex-1 resize-none bg-transparent text-[14px] leading-5 text-text-primary outline-none duration-300 placeholder:text-text-muted/55 scrollbar-hide',
         isExpanded
           ? 'max-h-48 min-h-[2rem] px-2 mb-14 py-1.5'
-          : 'max-h-32 min-h-[2rem] py-1.5 pl-11 lg:pr-44'
+          : cn('max-h-32 min-h-[2rem] py-1.5 lg:pr-44', hasAttachmentButton ? 'pl-11' : 'px-2')
       )}
       style={{ transitionProperty: 'margin' }}
     />
@@ -288,53 +297,68 @@ export function PromptInput(): JSX.Element {
           continue
         }
 
-        await window.manthan.setActiveProvider(payload.providerId)
+        try {
+          await window.manthan.setActiveProvider(payload.providerId)
 
-        if (payload.contentType === 'image') {
-          const result = (await window.manthan.generateImage(
+          if (payload.contentType === 'image') {
+            const result = (await window.manthan.generateImage(
+              payload.params as unknown as Record<string, unknown>
+            )) as JobResult
+            updateJob(jobId, {
+              status: 'completed',
+              progress: 100,
+              completedAt: Date.now(),
+              result
+            })
+            continue
+          }
+
+          if (payload.contentType === 'audio') {
+            const result = (await window.manthan.generateAudio(
+              payload.params as unknown as Record<string, unknown>
+            )) as JobResult
+            updateJob(jobId, {
+              status: 'completed',
+              progress: 100,
+              completedAt: Date.now(),
+              result
+            })
+            continue
+          }
+
+          const operation = (await window.manthan.generateVideo(
             payload.params as unknown as Record<string, unknown>
-          )) as JobResult
-          updateJob(jobId, {
-            status: 'completed',
-            progress: 100,
-            completedAt: Date.now(),
-            result
-          })
-          continue
-        }
+          )) as {
+            id?: string
+            status?: string
+            error?: string
+          }
 
-        if (payload.contentType === 'audio') {
-          const result = (await window.manthan.generateAudio(
-            payload.params as unknown as Record<string, unknown>
-          )) as JobResult
-          updateJob(jobId, {
-            status: 'completed',
-            progress: 100,
-            completedAt: Date.now(),
-            result
-          })
-          continue
-        }
+          if (operation.status === 'failed') {
+            updateJob(jobId, {
+              status: 'failed',
+              error: operation.error || 'Generation failed',
+              completedAt: Date.now()
+            })
+            continue
+          }
 
-        const operation = (await window.manthan.generateVideo(
-          payload.params as unknown as Record<string, unknown>
-        )) as {
-          id?: string
-          status?: string
-          error?: string
-        }
+          if (operation.id) {
+            updateJob(jobId, { id: operation.id })
+          }
+        } catch (jobError) {
+          console.error(`Job ${jobId} failed:`, jobError)
 
-        if (operation.status === 'failed') {
+          let errorMessage = jobError instanceof Error ? jobError.message : String(jobError)
+          if (errorMessage.includes('Provider not initialized')) {
+            errorMessage = 'Provider not initialized. Please add your API key in the settings.'
+          }
+
           updateJob(jobId, {
             status: 'failed',
-            error: operation.error || 'Generation failed',
+            error: errorMessage,
             completedAt: Date.now()
           })
-          continue
-        }
-
-        if (operation.id) {
-          updateJob(jobId, { id: operation.id })
         }
       }
     } catch (error) {
@@ -421,6 +445,7 @@ export function PromptInput(): JSX.Element {
                 isExpanded={isExpanded}
                 setIsExpanded={setIsExpanded}
                 placeholder={promptPlaceholder}
+                hasAttachmentButton={showPrimaryAttachmentButton}
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}
                 onKeyDown={(event) => {
@@ -890,20 +915,18 @@ function ModelSelector({
   onChange: (modelId: string) => void
 }): JSX.Element {
   return (
-    <div className="relative">
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="h-[2.75rem] w-full appearance-none rounded-[1rem] bg-white/5 px-3.5 pr-10 text-[0.85rem] font-medium text-text-primary outline-none transition-all hover:bg-white/10"
-      >
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger className="h-11 w-full rounded-xl bg-white/5 px-3.5 text-[0.85rem] font-medium text-text-primary outline-none transition-all hover:bg-white/10 border-none ring-0 focus:ring-0 focus:ring-offset-0 focus:bg-white/10">
+        <SelectValue placeholder="Select model" />
+      </SelectTrigger>
+      <SelectContent className="bg-bg-elevated border-border-subtle rounded-xl text-text-primary z-50">
         {models.map((model) => (
-          <option key={model.id} value={model.id}>
+          <SelectItem key={model.id} value={model.id} className="cursor-pointer focus:bg-white/10 focus:text-text-primary rounded-lg text-[0.85rem] font-medium">
             {model.name}
-          </option>
+          </SelectItem>
         ))}
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
-    </div>
+      </SelectContent>
+    </Select>
   )
 }
 
