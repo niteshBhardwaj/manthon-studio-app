@@ -27,7 +27,7 @@ export class GoogleVeoProvider implements MediaProvider {
     models: [
       {
         id: 'veo-3.1-generate-preview',
-        name: 'Veo 3.1',
+        name: 'Veo 3.1 Preview',
         description: 'High-fidelity video generation with native audio',
         modality: 'video',
         supportedInputs: ['text', 'image', 'frames', 'video'],
