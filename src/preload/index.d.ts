@@ -76,9 +76,56 @@ interface ManthanAPI {
   } | null>
   readFile: (path: string) => Promise<string>
 
+  // Assets
+  saveAsset: (options: {
+    projectId?: string
+    base64Data: string
+    mimeType: string
+    filename?: string
+    source?: 'generated' | 'imported' | 'uploaded'
+    metadata?: Record<string, unknown>
+  }) => Promise<AssetInfo>
+  listAssets: (options?: {
+    projectId?: string
+    type?: 'video' | 'image' | 'audio'
+    source?: 'generated' | 'imported' | 'uploaded'
+    limit?: number
+    offset?: number
+  }) => Promise<{ assets: AssetInfo[]; total: number }>
+  getAsset: (id: string) => Promise<AssetInfo | null>
+  readAsset: (id: string) => Promise<string | null>
+  deleteAsset: (id: string) => Promise<boolean>
+  importAssets: (projectId?: string) => Promise<AssetInfo[]>
+  getStorageStats: () => Promise<{
+    video: number
+    image: number
+    audio: number
+    cache: number
+    database: number
+    total: number
+  }>
+  cleanupCache: () => Promise<number>
+  openStorageFolder: () => Promise<void>
+
   // Events
   onGenerationProgress: (callback: (...args: unknown[]) => void) => () => void
   onGenerationComplete: (callback: (...args: unknown[]) => void) => () => void
+}
+
+interface AssetInfo {
+  id: string
+  project_id: string | null
+  filename: string
+  mime_type: string
+  size_bytes: number
+  type: 'video' | 'image' | 'audio'
+  source: 'generated' | 'imported' | 'uploaded'
+  storage_path: string
+  thumbnail_path: string | null
+  metadata: Record<string, unknown>
+  tags: string[]
+  created_at: number
+  updated_at: number
 }
 
 declare global {

@@ -8,6 +8,9 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { registerIpcHandlers, initializeStoredProviders } from './ipc'
+import { databaseManager } from './store/db'
+import { assetManager } from './store/asset-manager'
+import { appStore } from './store/app-store'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -54,6 +57,11 @@ app.whenReady().then(async () => {
     optimizer.watchWindowShortcuts(window)
   })
 
+  // Initialize database & asset storage
+  databaseManager.initialize()
+  assetManager.initialize()
+  appStore.initialize()
+
   // Register all IPC handlers
   registerIpcHandlers()
 
@@ -71,4 +79,9 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+// Graceful database shutdown
+app.on('before-quit', () => {
+  databaseManager.close()
 })

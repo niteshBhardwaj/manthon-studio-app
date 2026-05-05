@@ -3,13 +3,14 @@
 // All IPC communication between main and renderer processes
 // ============================================================
 
-import { ipcMain, dialog } from 'electron'
+import { ipcMain, dialog, shell } from 'electron'
 import { writeFile, readFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { app } from 'electron'
 import { providerRegistry } from '../providers/registry'
 import { keyStore } from '../store/key-store'
 import { appStore } from '../store/app-store'
+import { assetManager } from '../store/asset-manager'
 import { VideoGenParams, ImageGenParams, AudioGenParams } from '../providers/base'
 
 export function registerIpcHandlers(): void {
@@ -217,6 +218,7 @@ export function registerIpcHandlers(): void {
       filters: [
         { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'] },
         { name: 'Videos', extensions: ['mp4', 'webm'] },
+        { name: 'Audio', extensions: ['mp3', 'wav'] },
         { name: 'All Files', extensions: ['*'] }
       ]
     })
@@ -245,6 +247,89 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('file:read', async (_event, path: string) => {
     const data = await readFile(path)
     return data.toString('base64')
+  })
+
+  // ── Assets ───────────────────────────────────────────────
+  ipcMain.handle(
+    'asset:save',
+    async (
+      _event,
+      options: {
+        projectId?: string
+        base64Data: string
+        mimeType: string
+        filename?: string
+        source?: 'generated' | 'imported' | 'uploaded'
+        metadata?: Record<string, unknown>
+      }
+    ) => {
+      return assetManager.saveBase64Asset(options)
+    }
+  )
+
+  ipcMain.handle(
+    'asset:list',
+    async (
+      _event,
+      options?: {
+        projectId?: string
+        type?: 'video' | 'image' | 'audio'
+        source?: 'generated' | 'imported' | 'uploaded'
+        limit?: number
+        offset?: number
+      }
+    ) => {
+      return assetManager.listAssets(options)
+    }
+  )
+
+  ipcMain.handle('asset:get', async (_event, id: string) => {
+    return assetManager.getAsset(id)
+  })
+
+  ipcMain.handle('asset:read', async (_event, id: string) => {
+    return assetManager.readAssetBase64(id)
+  })
+
+  ipcMain.handle('asset:delete', async (_event, id: string) => {
+    return assetManager.deleteAsset(id)
+  })
+
+  ipcMain.handle('asset:import', async (_event, projectId?: string) => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile', 'multiSelections'],
+      filters: [
+        { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'] },
+        { name: 'Videos', extensions: ['mp4', 'webm'] },
+        { name: 'Audio', extensions: ['mp3', 'wav'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    })
+
+    if (result.canceled || result.filePaths.length === 0) return []
+
+    const imported = []
+    for (const filePath of result.filePaths) {
+      try {
+        const asset = await assetManager.importFromFile(projectId ?? 'default', filePath)
+        imported.push(asset)
+      } catch (e) {
+        console.warn(`[IPC] Failed to import ${filePath}:`, e)
+      }
+    }
+    return imported
+  })
+
+  ipcMain.handle('asset:stats', async () => {
+    return assetManager.getStorageStats()
+  })
+
+  ipcMain.handle('asset:cleanup-cache', async () => {
+    return assetManager.cleanupCache()
+  })
+
+  ipcMain.handle('storage:open-folder', async () => {
+    shell.openPath(app.getPath('userData'))
   })
 }
 

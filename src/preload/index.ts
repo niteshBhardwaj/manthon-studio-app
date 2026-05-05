@@ -50,6 +50,30 @@ const manthanAPI = {
   openFile: () => ipcRenderer.invoke('file:open'),
   readFile: (path: string) => ipcRenderer.invoke('file:read', path),
 
+  // ── Assets ────────────────────────────────────────────────
+  saveAsset: (options: {
+    projectId?: string
+    base64Data: string
+    mimeType: string
+    filename?: string
+    source?: 'generated' | 'imported' | 'uploaded'
+    metadata?: Record<string, unknown>
+  }) => ipcRenderer.invoke('asset:save', options),
+  listAssets: (options?: {
+    projectId?: string
+    type?: 'video' | 'image' | 'audio'
+    source?: 'generated' | 'imported' | 'uploaded'
+    limit?: number
+    offset?: number
+  }) => ipcRenderer.invoke('asset:list', options),
+  getAsset: (id: string) => ipcRenderer.invoke('asset:get', id),
+  readAsset: (id: string) => ipcRenderer.invoke('asset:read', id),
+  deleteAsset: (id: string) => ipcRenderer.invoke('asset:delete', id),
+  importAssets: (projectId?: string) => ipcRenderer.invoke('asset:import', projectId),
+  getStorageStats: () => ipcRenderer.invoke('asset:stats'),
+  cleanupCache: () => ipcRenderer.invoke('asset:cleanup-cache'),
+  openStorageFolder: () => ipcRenderer.invoke('storage:open-folder'),
+
   // ── Events ────────────────────────────────────────────────
   onGenerationProgress: (callback: (...args: unknown[]) => void) => {
     ipcRenderer.on('gen:progress', (_event, ...args) => callback(...args))
