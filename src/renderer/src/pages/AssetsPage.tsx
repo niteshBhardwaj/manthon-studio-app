@@ -17,11 +17,24 @@ import {
   FileAudio,
   FileVideo,
   FileImage,
-  Clock
+  Clock,
+  Download,
+  ZoomIn,
+  ZoomOut,
+  Info,
+  Check
 } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
 import { cn } from '../lib/utils'
 import { useProjectStore } from '../stores/project-store'
+import {
+  MorphingDialog,
+  MorphingDialogTrigger,
+  MorphingDialogContent,
+  MorphingDialogContainer,
+  MorphingDialogClose,
+  useMorphingDialog
+} from '../components/motion-primitives/morphing-dialog'
 
 interface Asset {
   id: string
@@ -38,6 +51,210 @@ interface Asset {
 
 type FilterType = 'all' | 'video' | 'image' | 'audio'
 
+const MorphingMedia = ({ asset, className }: { asset: Asset; className?: string }) => {
+  const { uniqueId } = useMorphingDialog()
+  const src = `asset:///${asset.storage_path.replace(/\\/g, '/')}`
+
+  if (asset.type === 'image') {
+    return (
+      <motion.img
+        src={src}
+        layoutId={`dialog-media-${uniqueId}`}
+        className={className}
+        alt={asset.filename}
+        onError={(e) => {
+          ;(e.target as HTMLImageElement).style.display = 'none'
+        }}
+      />
+    )
+  }
+  if (asset.type === 'video') {
+    return (
+      <motion.video
+        src={src}
+        layoutId={`dialog-media-${uniqueId}`}
+        className={className}
+        muted
+      />
+    )
+  }
+  return (
+    <motion.div
+      layoutId={`dialog-media-${uniqueId}`}
+      className={cn('flex items-center justify-center bg-bg-secondary', className)}
+    >
+      <FileAudio className="w-16 h-16 text-text-muted" />
+    </motion.div>
+  )
+}
+
+const AssetDetailModalContent = ({
+  asset,
+  onExport,
+  onDelete
+}: {
+  asset: Asset
+  onExport: () => void
+  onDelete: () => void
+}) => {
+  const [showInfo, setShowInfo] = useState(false)
+  const [zoomScale, setZoomScale] = useState(1)
+  const { setIsOpen, uniqueId } = useMorphingDialog()
+  const src = `asset:///${asset.storage_path.replace(/\\/g, '/')}`
+
+  return (
+    <MorphingDialogContent className="fixed inset-0 z-[100] flex flex-col bg-black/95 text-white">
+      {/* Top action bar */}
+      <div className="absolute top-0 left-0 right-0 h-24 pt-4 flex items-start justify-between px-6 z-50 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
+        <MorphingDialogClose className="p-2 hover:bg-white/10 rounded-full transition-colors pointer-events-auto mt-2">
+          <X className="w-6 h-6" />
+        </MorphingDialogClose>
+
+        <div className="flex items-center gap-2 pointer-events-auto mt-2">
+          {asset.type === 'image' && (
+            <button 
+              className="p-2 hover:bg-white/10 rounded-full transition-colors"
+              onClick={() => setZoomScale(s => s === 1 ? 2 : 1)}
+            >
+              {zoomScale === 1 ? <ZoomIn className="w-5 h-5" /> : <ZoomOut className="w-5 h-5" />}
+            </button>
+          )}
+          <button
+            className={cn(
+              'p-2 rounded-full transition-colors',
+              showInfo ? 'bg-accent text-white' : 'hover:bg-white/10'
+            )}
+            onClick={() => setShowInfo(!showInfo)}
+          >
+            <Info className="w-5 h-5" />
+          </button>
+          <button className="p-2 hover:bg-white/10 rounded-full" onClick={onExport}>
+            <Download className="w-5 h-5" />
+          </button>
+          <button
+            className="p-2 hover:bg-white/10 rounded-full text-white/80 hover:text-red-400"
+            onClick={() => {
+              setIsOpen(false)
+              onDelete()
+            }}
+          >
+            <Trash2 className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 flex overflow-hidden w-full h-full relative z-40">
+        {/* Main Preview */}
+        <div className="flex-1 relative flex items-center justify-center p-8 overflow-hidden">
+          {asset.type === 'image' && (
+            <motion.div 
+              className="w-full h-full flex items-center justify-center cursor-zoom-in"
+              onClick={() => setZoomScale(s => s === 1 ? 2 : 1)}
+              style={{ cursor: zoomScale === 1 ? 'zoom-in' : 'zoom-out' }}
+            >
+              <motion.img
+                src={src}
+                layoutId={`dialog-media-${uniqueId}`}
+                className="max-w-full max-h-full object-contain transition-transform duration-300 ease-out origin-center"
+                style={{ transform: `scale(${zoomScale})` }}
+              />
+            </motion.div>
+          )}
+          {asset.type === 'video' && (
+            <motion.video
+              src={src}
+              layoutId={`dialog-media-${uniqueId}`}
+              controls
+              autoPlay
+              className="max-w-full max-h-full"
+            />
+          )}
+          {asset.type === 'audio' && (
+            <motion.div
+              layoutId={`dialog-media-${uniqueId}`}
+              className="flex flex-col items-center gap-6"
+            >
+              <Music className="w-24 h-24 text-text-muted opacity-50" />
+              <audio src={src} controls className="w-80" />
+            </motion.div>
+          )}
+        </div>
+
+        {/* Info Sidebar */}
+        <AnimatePresence>
+          {showInfo && (
+            <motion.div
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: 360, opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              className="border-l border-white/10 bg-black/40 backdrop-blur-xl flex flex-col shrink-0 overflow-y-auto"
+            >
+              <div className="p-6 pt-24 flex flex-col gap-6 w-[360px]">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-medium">Info</h3>
+                  <button
+                    className="p-1 hover:bg-white/10 rounded-full"
+                    onClick={() => setShowInfo(false)}
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <input
+                  placeholder="Add a description"
+                  className="bg-transparent border-b border-white/20 pb-2 focus:outline-none focus:border-accent text-sm"
+                />
+
+                <div className="flex flex-col gap-6 mt-4">
+                  <h4 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+                    Details
+                  </h4>
+
+                  <div className="flex gap-4">
+                    <Clock className="w-5 h-5 text-text-muted shrink-0" />
+                    <div className="flex flex-col">
+                      <span className="text-sm">
+                        {new Date(asset.created_at).toLocaleDateString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric'
+                        })}
+                      </span>
+                      <span className="text-xs text-text-muted">
+                        {new Date(asset.created_at).toLocaleTimeString(undefined, {
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4">
+                    <ImageIcon className="w-5 h-5 text-text-muted shrink-0" />
+                    <div className="flex flex-col">
+                      <span className="text-sm break-all">{asset.filename}</span>
+                      <span className="text-xs text-text-muted">
+                        {(asset.size_bytes / 1024 / 1024).toFixed(1)} MB
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4">
+                    <Upload className="w-5 h-5 text-text-muted shrink-0" />
+                    <div className="flex flex-col">
+                      <span className="text-sm capitalize">{asset.source}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </MorphingDialogContent>
+  )
+}
+
 export function AssetsPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [assets, setAssets] = useState<Asset[]>([])
@@ -45,6 +262,7 @@ export function AssetsPage() {
   const [loading, setLoading] = useState(true)
   const [filterType, setFilterType] = useState<FilterType>('all')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [previewAssetId, setPreviewAssetId] = useState<string | null>(null)
   const { activeProjectId } = useProjectStore()
 
   // Load assets
@@ -84,10 +302,19 @@ export function AssetsPage() {
     loadAssets()
   }
 
+  // Export handler
+  const handleExport = async (ids: string[]) => {
+    if (!window.manthan) return
+    const result = await window.manthan.exportAssets(ids)
+    if (result.success) {
+      setSelectedIds(new Set())
+    }
+  }
+
   // Toggle selection
   const toggleSelect = (id: string, event: React.MouseEvent) => {
     const next = new Set(selectedIds)
-    if (event.ctrlKey || event.metaKey) {
+    if (event.ctrlKey || event.metaKey || selectedIds.size > 0) {
       if (next.has(id)) next.delete(id)
       else next.add(id)
     } else {
@@ -226,48 +453,92 @@ export function AssetsPage() {
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 pb-4">
           {assets.map((asset) => {
             const isSelected = selectedIds.has(asset.id)
+            const isPreviewOpen = previewAssetId === asset.id
+
             return (
-              <motion.div
+              <MorphingDialog
                 key={asset.id}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                onClick={(e) => toggleSelect(asset.id, e)}
-                className={cn(
-                  'group relative rounded-xl border bg-bg-elevated overflow-hidden cursor-pointer transition-all',
-                  isSelected
-                    ? 'border-accent ring-1 ring-accent/30'
-                    : 'border-border-subtle hover:border-border-focus'
-                )}
+                isOpen={isPreviewOpen}
+                setIsOpen={(val) => setPreviewAssetId(val ? asset.id : null)}
+                transition={{ duration: 0.3, type: 'spring', bounce: 0.2 }}
               >
-                {/* Preview area */}
-                <div className="aspect-square bg-bg-secondary flex items-center justify-center relative">
-                  {asset.type === 'image' ? (
-                    <img
-                      src={`asset://${asset.storage_path}`}
-                      alt={asset.filename}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        ;(e.target as HTMLImageElement).style.display = 'none'
+                <MorphingDialogTrigger
+                  className={cn(
+                    'group relative rounded-xl border bg-bg-elevated overflow-hidden cursor-pointer transition-all w-full text-left aspect-square flex flex-col',
+                    isSelected
+                      ? 'border-accent ring-1 ring-accent/30'
+                      : 'border-border-subtle hover:border-border-focus'
+                  )}
+                >
+                  {/* Selection Overlay Interceptor */}
+                  {selectedIds.size > 0 && (
+                    <div
+                      className="absolute inset-0 z-10"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        toggleSelect(asset.id, e)
                       }}
                     />
-                  ) : (
-                    <TypeIcon type={asset.type} />
                   )}
-                  {/* Source badge */}
-                  <span className="absolute top-1.5 right-1.5 text-[9px] px-1.5 py-0.5 rounded-md bg-bg-primary/80 text-text-muted backdrop-blur-sm">
-                    {asset.source}
-                  </span>
-                </div>
-                {/* Info */}
-                <div className="p-2.5">
-                  <p className="text-[11px] font-medium text-text-primary truncate">
-                    {asset.filename}
-                  </p>
-                  <p className="text-[10px] text-text-muted mt-0.5">
-                    {formatSize(asset.size_bytes)} · {formatDate(asset.created_at)}
-                  </p>
-                </div>
-              </motion.div>
+
+                  {/* Checkbox */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      toggleSelect(asset.id, e)
+                    }}
+                    className={cn(
+                      'absolute top-2 left-2 z-20 flex h-5 w-5 items-center justify-center rounded-full border shadow-sm transition-all',
+                      isSelected
+                        ? 'bg-accent border-accent text-white'
+                        : 'bg-black/20 border-white/40 text-transparent opacity-0 group-hover:opacity-100 hover:bg-black/40'
+                    )}
+                  >
+                    <Check className="w-3 h-3" strokeWidth={3} />
+                  </button>
+
+                  {/* Zoom Icon (only in selection mode) */}
+                  {selectedIds.size > 0 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setPreviewAssetId(asset.id)
+                      }}
+                      className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-all hover:bg-black/70 hover:scale-110"
+                    >
+                      <ZoomIn className="w-4 h-4" />
+                    </button>
+                  )}
+
+                  {/* Preview area */}
+                  <div className="flex-1 bg-bg-secondary flex items-center justify-center relative overflow-hidden">
+                    <MorphingMedia asset={asset} className="w-full h-full object-cover" />
+
+                    {/* Source badge */}
+                    <span className="absolute top-1.5 right-1.5 text-[9px] px-1.5 py-0.5 rounded-md bg-bg-primary/80 text-text-muted backdrop-blur-sm z-0">
+                      {asset.source}
+                    </span>
+                  </div>
+
+                  {/* Info */}
+                  <div className="p-2.5 bg-bg-elevated shrink-0 z-0 relative">
+                    <p className="text-[11px] font-medium text-text-primary truncate">
+                      {asset.filename}
+                    </p>
+                    <p className="text-[10px] text-text-muted mt-0.5">
+                      {formatSize(asset.size_bytes)} · {formatDate(asset.created_at)}
+                    </p>
+                  </div>
+                </MorphingDialogTrigger>
+
+                <MorphingDialogContainer>
+                  <AssetDetailModalContent
+                    asset={asset}
+                    onExport={() => handleExport([asset.id])}
+                    onDelete={() => handleDelete([asset.id])}
+                  />
+                </MorphingDialogContainer>
+              </MorphingDialog>
             )
           })}
         </div>
@@ -284,9 +555,7 @@ export function AssetsPage() {
                 onClick={(e) => toggleSelect(asset.id, e)}
                 className={cn(
                   'flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-all',
-                  isSelected
-                    ? 'border-accent/30 bg-accent/5'
-                    : 'border-transparent hover:bg-bg-hover'
+                  isSelected ? 'border-accent/30 bg-accent/5' : 'border-transparent hover:bg-bg-hover'
                 )}
               >
                 <TypeIcon type={asset.type} />
@@ -320,6 +589,12 @@ export function AssetsPage() {
               {selectedIds.size} selected
             </span>
             <div className="w-px h-4 bg-border-subtle" />
+            <button
+              onClick={() => handleExport(Array.from(selectedIds))}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-text-muted hover:text-text-primary hover:bg-bg-hover transition-all"
+            >
+              <Download className="w-3.5 h-3.5" /> Download
+            </button>
             <button
               onClick={() => handleDelete(Array.from(selectedIds))}
               className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10 transition-all"

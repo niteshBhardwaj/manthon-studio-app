@@ -3,8 +3,9 @@
 // Electron main process: window management, IPC, security
 // ============================================================
 
-import { app, shell, BrowserWindow } from 'electron'
+import { app, shell, BrowserWindow, protocol, net } from 'electron'
 import { join } from 'path'
+import { pathToFileURL } from 'url'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { registerIpcHandlers, initializeStoredProviders } from './ipc'
@@ -52,11 +53,29 @@ function createWindow(): void {
   }
 }
 
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'asset', privileges: { secure: true, standard: true, supportFetchAPI: true, bypassCSP: true } }
+])
+
 app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.manthan.studio')
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
+  })
+
+  // Register custom protocol for local asset previews
+  protocol.handle('asset', (request) => {
+    console.log('[asset-protocol] Request URL:', request.url)
+    let rawPath = request.url.slice('asset://'.length)
+    // Handle cases where the URL parser adds an extra leading slash on Windows
+    if (process.platform === 'win32' && rawPath.startsWith('/')) {
+      rawPath = rawPath.slice(1)
+    }
+    rawPath = decodeURIComponent(rawPath)
+    const fileUrl = pathToFileURL(rawPath).toString()
+    console.log('[asset-protocol] Resolved file URL:', fileUrl)
+    return net.fetch(fileUrl)
   })
 
   // Initialize database & asset storage

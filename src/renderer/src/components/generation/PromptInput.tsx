@@ -29,6 +29,8 @@ import {
   BottomActionBar,
   SelectedOptionsDisplay
 } from './prompt'
+import { AssetPickerModal } from './AssetPickerModal'
+import { MorphingDialog, MorphingDialogTrigger } from '../motion-primitives/morphing-dialog'
 
 export function PromptInput(): JSX.Element {
   const {
@@ -61,6 +63,8 @@ export function PromptInput(): JSX.Element {
   const [isGenerating, setIsGenerating] = useState(false)
   const [isConfigOpen, setIsConfigOpen] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
+  const [isAssetPickerOpen, setIsAssetPickerOpen] = useState(false)
+  const [assetPickerTarget, setAssetPickerTarget] = useState<'start' | 'end' | 'reference'>('reference')
   const configRef = useRef<HTMLDivElement>(null)
 
   // ── Derived state ──────────────────────────────────────
@@ -108,22 +112,36 @@ export function PromptInput(): JSX.Element {
   // ── Handlers ───────────────────────────────────────────
 
   const handleFileUpload = useCallback(
-    async (target: 'start' | 'end' | 'reference') => {
-      if (!window.manthan) return
-      const file = await window.manthan.openFile()
-      if (!file) return
-
-      const input: BinaryInput = { data: file.data, mimeType: file.mimeType }
-      if (target === 'start') {
-        setStartFrame(input)
-      } else if (target === 'end') {
-        setEndFrame(input)
-      } else {
-        addReferenceImage(input)
-      }
+    (target: 'start' | 'end' | 'reference') => {
+      setAssetPickerTarget(target)
+      setIsAssetPickerOpen(true)
     },
-    [addReferenceImage, setEndFrame, setStartFrame]
+    []
   )
+
+  const handleAssetSelect = useCallback(async (assets: import('../../../../preload/index.d').AssetInfo[]) => {
+    if (!window.manthan) return
+    setIsAssetPickerOpen(false)
+
+    for (const asset of assets) {
+      try {
+        const base64Data = await window.manthan.readAsset(asset.id)
+        if (!base64Data) continue
+        
+        const input: BinaryInput = { data: base64Data, mimeType: asset.mime_type }
+        
+        if (assetPickerTarget === 'start') {
+          setStartFrame(input)
+        } else if (assetPickerTarget === 'end') {
+          setEndFrame(input)
+        } else {
+          addReferenceImage(input)
+        }
+      } catch (error) {
+        console.error('Failed to read asset:', error)
+      }
+    }
+  }, [assetPickerTarget, addReferenceImage, setEndFrame, setStartFrame])
 
   const handlePrimaryAttachment = useCallback(() => {
     if (contentType === 'image') {
@@ -270,8 +288,9 @@ export function PromptInput(): JSX.Element {
   // ── Render ─────────────────────────────────────────────
 
   return (
-    <motion.div className="absolute bottom-6 left-1/2 z-40 w-full max-w-3xl -translate-x-1/2 px-4">
-      <div className="relative">
+    <MorphingDialog isOpen={isAssetPickerOpen} setIsOpen={setIsAssetPickerOpen}>
+      <motion.div className="absolute bottom-6 left-1/2 z-40 w-full max-w-3xl -translate-x-1/2 px-4">
+        <div className="relative">
         <motion.div
           className={cn(
             'glass-strong relative overflow-visible rounded-[1.5rem] p-3 transition-shadow lg:p-4',
@@ -324,13 +343,13 @@ export function PromptInput(): JSX.Element {
                     isExpanded ? 'bottom-1 left-1' : 'left-0 top-0'
                   )}
                 >
-                  <button
-                    type="button"
-                    onClick={handlePrimaryAttachment}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-transparent text-text-secondary transition-colors hover:text-text-primary"
-                  >
-                    <Plus className="h-5 w-5" />
-                  </button>
+                  <MorphingDialogTrigger onClick={handlePrimaryAttachment}>
+                    <div
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-transparent text-text-secondary transition-colors hover:text-text-primary"
+                    >
+                      <Plus className="h-5 w-5" />
+                    </div>
+                  </MorphingDialogTrigger>
                 </div>
               ) : null}
             </div>
@@ -457,7 +476,14 @@ export function PromptInput(): JSX.Element {
           onSetMode={setActiveMode}
           onSetValue={setCapabilityValue}
         />
-      </div>
-    </motion.div>
+        </div>
+        <AssetPickerModal
+          isOpen={isAssetPickerOpen}
+          onClose={() => setIsAssetPickerOpen(false)}
+          onSelect={handleAssetSelect}
+          currentContentType={contentType}
+        />
+      </motion.div>
+    </MorphingDialog>
   )
 }

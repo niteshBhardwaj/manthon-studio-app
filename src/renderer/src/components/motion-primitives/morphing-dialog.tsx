@@ -16,7 +16,7 @@ export type MorphingDialogContextType = {
 
 const MorphingDialogContext = React.createContext<MorphingDialogContextType | null>(null)
 
-function useMorphingDialog() {
+export function useMorphingDialog() {
   const context = useContext(MorphingDialogContext)
   if (!context) {
     throw new Error('useMorphingDialog must be used within a MorphingDialogProvider')
@@ -27,10 +27,14 @@ function useMorphingDialog() {
 export type MorphingDialogProviderProps = {
   children: React.ReactNode
   transition?: Transition
+  isOpen?: boolean
+  setIsOpen?: React.Dispatch<React.SetStateAction<boolean>>
 }
 
-function MorphingDialogProvider({ children, transition }: MorphingDialogProviderProps) {
-  const [isOpen, setIsOpen] = useState(false)
+function MorphingDialogProvider({ children, transition, isOpen: controlledIsOpen, setIsOpen: controlledSetIsOpen }: MorphingDialogProviderProps) {
+  const [internalIsOpen, setInternalIsOpen] = useState(false)
+  const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen
+  const setIsOpen = controlledSetIsOpen !== undefined ? controlledSetIsOpen : setInternalIsOpen
   const uniqueId = useId()
   const triggerRef = useRef<HTMLButtonElement>(null!)
 
@@ -54,11 +58,13 @@ function MorphingDialogProvider({ children, transition }: MorphingDialogProvider
 export type MorphingDialogProps = {
   children: React.ReactNode
   transition?: Transition
+  isOpen?: boolean
+  setIsOpen?: React.Dispatch<React.SetStateAction<boolean>>
 }
 
-function MorphingDialog({ children, transition }: MorphingDialogProps) {
+function MorphingDialog({ children, transition, isOpen, setIsOpen }: MorphingDialogProps) {
   return (
-    <MorphingDialogProvider>
+    <MorphingDialogProvider transition={transition} isOpen={isOpen} setIsOpen={setIsOpen}>
       <MotionConfig transition={transition}>{children}</MotionConfig>
     </MorphingDialogProvider>
   )
@@ -69,19 +75,22 @@ export type MorphingDialogTriggerProps = {
   className?: string
   style?: React.CSSProperties
   triggerRef?: React.RefObject<HTMLButtonElement>
+  onClick?: () => void
 }
 
 function MorphingDialogTrigger({
   children,
   className,
   style,
-  triggerRef
+  triggerRef,
+  onClick
 }: MorphingDialogTriggerProps) {
   const { setIsOpen, isOpen, uniqueId } = useMorphingDialog()
 
   const handleClick = useCallback(() => {
     setIsOpen(!isOpen)
-  }, [isOpen, setIsOpen])
+    if (onClick) onClick()
+  }, [isOpen, setIsOpen, onClick])
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
@@ -214,7 +223,7 @@ function MorphingDialogContainer({ children }: MorphingDialogContainerProps) {
         <>
           <motion.div
             key={`backdrop-${uniqueId}`}
-            className="fixed inset-0 h-full w-full bg-white/40 backdrop-blur-xs dark:bg-black/40"
+            className="fixed inset-0 h-full w-full bg-black/60 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}

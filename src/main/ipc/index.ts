@@ -320,6 +320,63 @@ export function registerIpcHandlers(): void {
     return imported
   })
 
+  ipcMain.handle('asset:export', async (_event, ids: string[]) => {
+    if (!ids || ids.length === 0) return { success: false, error: 'No assets selected' }
+    
+    // For single file, use Save dialog
+    if (ids.length === 1) {
+      const asset = assetManager.getAsset(ids[0])
+      if (!asset) return { success: false, error: 'Asset not found' }
+      
+      const result = await dialog.showSaveDialog({
+        defaultPath: asset.filename,
+        title: 'Export Asset'
+      })
+      
+      if (result.canceled || !result.filePath) return { success: false }
+      
+      try {
+        const { copyFile } = require('fs/promises')
+        await copyFile(asset.storage_path, result.filePath)
+        return { success: true }
+      } catch (e: any) {
+        return { success: false, error: e.message }
+      }
+    }
+    
+    // For multiple files, use Select Folder dialog
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory', 'createDirectory'],
+      title: 'Select Destination Folder'
+    })
+    
+    if (result.canceled || result.filePaths.length === 0) return { success: false }
+    
+    const targetDir = result.filePaths[0]
+    let successCount = 0
+    let lastError = ''
+    const { copyFile } = require('fs/promises')
+    
+    for (const id of ids) {
+      const asset = assetManager.getAsset(id)
+      if (!asset) continue
+      
+      try {
+        const targetPath = join(targetDir, asset.filename)
+        await copyFile(asset.storage_path, targetPath)
+        successCount++
+      } catch (e: any) {
+        lastError = e.message
+      }
+    }
+    
+    if (successCount === 0 && lastError) {
+      return { success: false, error: lastError }
+    }
+    
+    return { success: true, count: successCount }
+  })
+
   ipcMain.handle('asset:stats', async () => {
     return storageManager.getStorageBreakdown()
   })

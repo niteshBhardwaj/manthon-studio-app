@@ -84,6 +84,7 @@ const manthanAPI = {
   readAsset: (id: string) => ipcRenderer.invoke('asset:read', id),
   deleteAsset: (id: string) => ipcRenderer.invoke('asset:delete', id),
   importAssets: (projectId?: string) => ipcRenderer.invoke('asset:import', projectId),
+  exportAssets: (ids: string[]) => ipcRenderer.invoke('asset:export', ids),
   getStorageStats: () => ipcRenderer.invoke('asset:stats'),
   openStorageFolder: () => ipcRenderer.invoke('storage:open-folder'),
 

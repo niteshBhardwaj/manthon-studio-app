@@ -116,6 +116,7 @@ interface ManthanAPI {
   readAsset: (id: string) => Promise<string | null>
   deleteAsset: (id: string) => Promise<boolean>
   importAssets: (projectId?: string) => Promise<AssetInfo[]>
+  exportAssets: (ids: string[]) => Promise<{ success: boolean; count?: number; error?: string }>
   getStorageStats: () => Promise<StorageReport>
   openStorageFolder: () => Promise<void>
 
