@@ -4,23 +4,18 @@
 // ============================================================
 
 import { motion } from 'framer-motion'
-import { Music, Video, Image as ImageIcon, Wand2 } from 'lucide-react'
+import { Wand2 } from 'lucide-react'
 import { type JSX } from 'react'
 import { useAppStore } from '../../stores/app-store'
 import { useGenerationStore } from '../../stores/generation-store'
-import { useModelStore } from '../../stores/model-store'
-import {
-  getAvailableContentTypes,
-  getDefaultModel,
-  getModelById,
-  type ContentType
-} from '../../lib/model-capabilities'
+import { getModelById } from '../../lib/model-capabilities'
 import { PromptExamplesList } from '../generation/PromptExamplesList'
 import { PromptInput } from '../generation/PromptInput'
 import { TemplateSelector } from '../generation/TemplateSelector'
 import { MediaGrid } from '../output/MediaGrid'
 import { HistoryPage } from '../../pages/HistoryPage'
 import { AssetsPage } from '../../pages/AssetsPage'
+import { QueueDashboard } from '../queue/QueueDashboard'
 
 export function MainCanvas(): JSX.Element {
   const { activeSidebarTab } = useAppStore()
@@ -40,6 +35,7 @@ export function MainCanvas(): JSX.Element {
             )}
           </>
         )}
+        {activeSidebarTab === 'queue' && <QueueDashboard />}
         {activeSidebarTab === 'history' && <HistoryPage />}
         {activeSidebarTab === 'assets' && <AssetsPage />}
         {activeSidebarTab === 'templates' && <TemplateSelector />}
@@ -51,18 +47,8 @@ export function MainCanvas(): JSX.Element {
 }
 
 function EmptyState(): JSX.Element {
-  const { enabledModelIds } = useModelStore()
-  const { setContentType, setPrompt, selectedModel, setCapabilityValue } = useGenerationStore()
-  const availableTypes = getAvailableContentTypes(enabledModelIds)
+  const { setPrompt, selectedModel, setCapabilityValue } = useGenerationStore()
   const selectedModelDescriptor = getModelById(selectedModel)
-
-  const handleSelectType = (type: ContentType): void => {
-    setContentType(type, enabledModelIds)
-    setTimeout(() => {
-      const textarea = document.querySelector<HTMLTextAreaElement>('textarea')
-      textarea?.focus()
-    }, 100)
-  }
 
   return (
     <div style={{ display: 'grid', placeItems: 'center', height: '100%', paddingBottom: '8rem' }}>

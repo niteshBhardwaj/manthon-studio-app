@@ -1,11 +1,18 @@
 // ============================================================
-// Manthan Studio — Preload Type Declarations
+// Manthan Studio - Preload Type Declarations
 // ============================================================
 
-import { ElectronAPI } from '@electron-toolkit/preload'
+import type { ElectronAPI } from '@electron-toolkit/preload'
+import type {
+  EnqueueJobInput,
+  QueueJob,
+  QueueJobCompletePayload,
+  QueueJobFailedPayload,
+  QueueJobProgressPayload,
+  QueueState
+} from '../main/queue/types'
 
 interface ManthanAPI {
-  // API Keys
   saveApiKey: (provider: string, key: string) => Promise<{ success: boolean; error?: string }>
   testApiKey: (
     provider: string,
@@ -21,7 +28,6 @@ interface ManthanAPI {
     key: string
   ) => Promise<{ connected: boolean; message: string; model?: string }>
 
-  // Providers
   getProviders: () => Promise<
     Array<{
       id: string
@@ -49,25 +55,27 @@ interface ManthanAPI {
   getEnabledModels: () => Promise<string[]>
   setEnabledModels: (ids: string[]) => Promise<{ success: boolean }>
 
-  // Generation
-  generateVideo: (params: Record<string, unknown>) => Promise<Record<string, unknown>>
-  generateImage: (params: Record<string, unknown>) => Promise<Record<string, unknown>>
-  generateAudio: (params: Record<string, unknown>) => Promise<Record<string, unknown>>
-  pollOperation: (opId: string) => Promise<Record<string, unknown>>
-  cancelOperation: (opId: string) => Promise<{ success: boolean }>
+  generateVideo: (job: EnqueueJobInput) => Promise<QueueJob>
+  generateImage: (job: EnqueueJobInput) => Promise<QueueJob>
+  generateAudio: (job: EnqueueJobInput) => Promise<QueueJob>
 
-  // History
+  listQueue: () => Promise<QueueState>
+  pauseQueue: () => Promise<{ success: boolean }>
+  resumeQueue: () => Promise<{ success: boolean }>
+  cancelQueueJob: (id: string) => Promise<{ success: boolean }>
+  retryQueueJob: (id: string) => Promise<{ success: boolean }>
+  reorderQueueJob: (id: string, newPriority: number) => Promise<{ success: boolean }>
+  clearCompletedQueueJobs: () => Promise<{ success: boolean }>
+  deleteQueueJob: (id: string) => Promise<{ success: boolean }>
+
   getHistory: () => Promise<Record<string, unknown>[]>
   clearHistory: () => Promise<{ success: boolean }>
 
-  // Templates
   getTemplates: () => Promise<Array<{ id: string; name: string; prompt: string; category: string }>>
 
-  // Preferences
   getPreferences: () => Promise<Record<string, unknown>>
   setPreference: (key: string, value: unknown) => Promise<{ success: boolean }>
 
-  // Files
   saveMedia: (data: string, filename: string, mimeType: string) => Promise<{ path: string }>
   openFile: () => Promise<{
     path: string
@@ -76,7 +84,6 @@ interface ManthanAPI {
   } | null>
   readFile: (path: string) => Promise<string>
 
-  // Assets
   saveAsset: (options: {
     projectId?: string
     base64Data: string
@@ -107,7 +114,6 @@ interface ManthanAPI {
   cleanupCache: () => Promise<number>
   openStorageFolder: () => Promise<void>
 
-  // Projects
   listProjects: () => Promise<ProjectInfo[]>
   createProject: (options: {
     name: string
@@ -122,9 +128,10 @@ interface ManthanAPI {
   deleteProject: (id: string) => Promise<{ success: boolean }>
   getProjectColors: () => Promise<string[]>
 
-  // Events
-  onGenerationProgress: (callback: (...args: unknown[]) => void) => () => void
-  onGenerationComplete: (callback: (...args: unknown[]) => void) => () => void
+  onQueueUpdate: (callback: (payload: QueueState) => void) => () => void
+  onQueueJobProgress: (callback: (payload: QueueJobProgressPayload) => void) => () => void
+  onQueueJobComplete: (callback: (payload: QueueJobCompletePayload) => void) => () => void
+  onQueueJobFailed: (callback: (payload: QueueJobFailedPayload) => void) => () => void
 }
 
 interface ProjectInfo {

@@ -12,7 +12,8 @@ import { keyStore } from '../store/key-store'
 import { appStore } from '../store/app-store'
 import { assetManager } from '../store/asset-manager'
 import { projectManager } from '../store/project-manager'
-import { VideoGenParams, ImageGenParams, AudioGenParams } from '../providers/base'
+import type { EnqueueJobInput } from '../queue/types'
+import { queueManager } from '../queue/queue-manager'
 
 export function registerIpcHandlers(): void {
   // ── API Key Management ──────────────────────────────────
@@ -129,51 +130,48 @@ export function registerIpcHandlers(): void {
   })
 
   // ── Generation ──────────────────────────────────────────
-  ipcMain.handle('gen:video', async (event, params: VideoGenParams) => {
-    const provider = providerRegistry.getActive()
-    if (!provider) throw new Error('No active provider')
-    if (!provider.generateVideo) throw new Error('Provider does not support video generation')
-
-    const operation = await provider.generateVideo(params)
-    appStore.addToHistory(operation)
-
-    // Start background polling
-    if (operation.status === 'generating') {
-      pollInBackground(event.sender, operation.id)
-    }
-
-    return operation
+  ipcMain.handle('gen:video', async (_event, job: EnqueueJobInput) => {
+    return queueManager.enqueue(job)
   })
 
-  ipcMain.handle('gen:image', async (_event, params: ImageGenParams) => {
-    const provider = providerRegistry.get('google-imagen')
-    if (!provider) throw new Error('Image provider not found')
-    if (!provider.generateImage) throw new Error('Provider does not support image generation')
-
-    const result = await provider.generateImage(params)
-    return result
+  ipcMain.handle('gen:image', async (_event, job: EnqueueJobInput) => {
+    return queueManager.enqueue(job)
   })
 
-  ipcMain.handle('gen:audio', async (_event, params: AudioGenParams) => {
-    const provider = providerRegistry.get('google-lyria')
-    if (!provider) throw new Error('Audio provider not found')
-    if (!provider.generateAudio) throw new Error('Provider does not support audio generation')
-
-    const result = await provider.generateAudio(params)
-    return result
+  ipcMain.handle('gen:audio', async (_event, job: EnqueueJobInput) => {
+    return queueManager.enqueue(job)
   })
 
-  ipcMain.handle('gen:poll', async (_event, operationId: string) => {
-    const provider = providerRegistry.getActive()
-    if (!provider?.pollOperation) throw new Error('No active provider')
-    return provider.pollOperation(operationId)
+  ipcMain.handle('queue:list', async () => {
+    return queueManager.getQueueState()
   })
 
-  ipcMain.handle('gen:cancel', async (_event, operationId: string) => {
-    const provider = providerRegistry.getActive()
-    if (!provider?.cancelOperation) throw new Error('No active provider')
-    await provider.cancelOperation(operationId)
-    return { success: true }
+  ipcMain.handle('queue:pause', async () => {
+    return queueManager.pause()
+  })
+
+  ipcMain.handle('queue:resume', async () => {
+    return queueManager.resume()
+  })
+
+  ipcMain.handle('queue:cancel', async (_event, id: string) => {
+    return queueManager.cancelJob(id)
+  })
+
+  ipcMain.handle('queue:retry', async (_event, id: string) => {
+    return queueManager.retryJob(id)
+  })
+
+  ipcMain.handle('queue:reorder', async (_event, id: string, newPriority: number) => {
+    return queueManager.reorderJob(id, newPriority)
+  })
+
+  ipcMain.handle('queue:clear-completed', async () => {
+    return queueManager.clearCompleted()
+  })
+
+  ipcMain.handle('queue:delete', async (_event, id: string) => {
+    return queueManager.deleteJob(id)
   })
 
   // ── History ─────────────────────────────────────────────
@@ -197,7 +195,7 @@ export function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('preferences:set', async (_event, key: string, value: unknown) => {
-    appStore.setPreference(key as 'theme', value as 'dark')
+    appStore.setPreference(key, value)
     return { success: true }
   })
 
@@ -309,7 +307,7 @@ export function registerIpcHandlers(): void {
 
     if (result.canceled || result.filePaths.length === 0) return []
 
-    const imported = []
+    const imported: Array<Awaited<ReturnType<typeof assetManager.importFromFile>>> = []
     for (const filePath of result.filePaths) {
       try {
         const asset = await assetManager.importFromFile(projectId ?? 'default', filePath)
@@ -367,48 +365,6 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('project:colors', async () => {
     return projectManager.getColors()
   })
-}
-
-// Background polling for long-running video generation
-async function pollInBackground(sender: Electron.WebContents, operationId: string): Promise<void> {
-  const provider = providerRegistry.getActive()
-  if (!provider?.pollOperation) return
-
-  const maxAttempts = 120 // 20 minutes max
-  let attempts = 0
-
-  const poll = async (): Promise<void> => {
-    try {
-      const result = await provider.pollOperation!(operationId)
-
-      sender.send('gen:progress', {
-        operationId,
-        status: result.status,
-        progress: Math.min((attempts / 30) * 100, 95) // Estimate progress
-      })
-
-      if (result.status === 'completed' || result.status === 'failed') {
-        sender.send('gen:complete', result)
-        // Update history
-        appStore.addToHistory(result)
-        return
-      }
-
-      attempts++
-      if (attempts < maxAttempts) {
-        setTimeout(poll, 10000) // Poll every 10 seconds
-      }
-    } catch {
-      sender.send('gen:complete', {
-        id: operationId,
-        status: 'failed',
-        error: 'Polling failed'
-      })
-    }
-  }
-
-  // Start polling after 10 seconds
-  setTimeout(poll, 10000)
 }
 
 // Initialize providers with stored keys on startup

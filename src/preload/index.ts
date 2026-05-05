@@ -1,14 +1,18 @@
 // ============================================================
-// Manthan Studio — Preload Script
+// Manthan Studio - Preload Script
 // Secure IPC bridge via contextBridge
 // ============================================================
 
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
-// Typed API exposed to the renderer process
+function subscribe<T>(channel: string, callback: (payload: T) => void): () => void {
+  const listener = (_event: Electron.IpcRendererEvent, payload: T): void => callback(payload)
+  ipcRenderer.on(channel, listener)
+  return () => ipcRenderer.removeListener(channel, listener)
+}
+
 const manthanAPI = {
-  // ── API Keys ──────────────────────────────────────────────
   saveApiKey: (provider: string, key: string) => ipcRenderer.invoke('api-key:save', provider, key),
   testApiKey: (provider: string, key: string) => ipcRenderer.invoke('api-key:test', provider, key),
   getApiKeyStatus: (provider: string) => ipcRenderer.invoke('api-key:status', provider),
@@ -18,7 +22,6 @@ const manthanAPI = {
   testGroupKey: (group: string, key: string) =>
     ipcRenderer.invoke('api-key:test-group', group, key),
 
-  // ── Providers ─────────────────────────────────────────────
   getProviders: () => ipcRenderer.invoke('provider:list'),
   setActiveProvider: (id: string) => ipcRenderer.invoke('provider:set-active', id),
   getActiveProvider: () => ipcRenderer.invoke('provider:get-active'),
@@ -26,31 +29,33 @@ const manthanAPI = {
   getEnabledModels: () => ipcRenderer.invoke('models:get-enabled'),
   setEnabledModels: (ids: string[]) => ipcRenderer.invoke('models:set-enabled', ids),
 
-  // ── Generation ────────────────────────────────────────────
-  generateVideo: (params: Record<string, unknown>) => ipcRenderer.invoke('gen:video', params),
-  generateImage: (params: Record<string, unknown>) => ipcRenderer.invoke('gen:image', params),
-  generateAudio: (params: Record<string, unknown>) => ipcRenderer.invoke('gen:audio', params),
-  pollOperation: (opId: string) => ipcRenderer.invoke('gen:poll', opId),
-  cancelOperation: (opId: string) => ipcRenderer.invoke('gen:cancel', opId),
+  generateVideo: (job: Record<string, unknown>) => ipcRenderer.invoke('gen:video', job),
+  generateImage: (job: Record<string, unknown>) => ipcRenderer.invoke('gen:image', job),
+  generateAudio: (job: Record<string, unknown>) => ipcRenderer.invoke('gen:audio', job),
 
-  // ── History ───────────────────────────────────────────────
+  listQueue: () => ipcRenderer.invoke('queue:list'),
+  pauseQueue: () => ipcRenderer.invoke('queue:pause'),
+  resumeQueue: () => ipcRenderer.invoke('queue:resume'),
+  cancelQueueJob: (id: string) => ipcRenderer.invoke('queue:cancel', id),
+  retryQueueJob: (id: string) => ipcRenderer.invoke('queue:retry', id),
+  reorderQueueJob: (id: string, newPriority: number) =>
+    ipcRenderer.invoke('queue:reorder', id, newPriority),
+  clearCompletedQueueJobs: () => ipcRenderer.invoke('queue:clear-completed'),
+  deleteQueueJob: (id: string) => ipcRenderer.invoke('queue:delete', id),
+
   getHistory: () => ipcRenderer.invoke('history:get'),
   clearHistory: () => ipcRenderer.invoke('history:clear'),
 
-  // ── Templates ─────────────────────────────────────────────
   getTemplates: () => ipcRenderer.invoke('templates:get'),
 
-  // ── Preferences ───────────────────────────────────────────
   getPreferences: () => ipcRenderer.invoke('preferences:get'),
   setPreference: (key: string, value: unknown) => ipcRenderer.invoke('preferences:set', key, value),
 
-  // ── Files ─────────────────────────────────────────────────
   saveMedia: (data: string, filename: string, mimeType: string) =>
     ipcRenderer.invoke('file:save', data, filename, mimeType),
   openFile: () => ipcRenderer.invoke('file:open'),
   readFile: (path: string) => ipcRenderer.invoke('file:read', path),
 
-  // ── Assets ────────────────────────────────────────────────
   saveAsset: (options: {
     projectId?: string
     base64Data: string
@@ -74,7 +79,6 @@ const manthanAPI = {
   cleanupCache: () => ipcRenderer.invoke('asset:cleanup-cache'),
   openStorageFolder: () => ipcRenderer.invoke('storage:open-folder'),
 
-  // ── Projects ───────────────────────────────────────────────
   listProjects: () => ipcRenderer.invoke('project:list'),
   createProject: (options: { name: string; description?: string; color?: string; icon?: string }) =>
     ipcRenderer.invoke('project:create', options),
@@ -85,15 +89,13 @@ const manthanAPI = {
   deleteProject: (id: string) => ipcRenderer.invoke('project:delete', id),
   getProjectColors: () => ipcRenderer.invoke('project:colors'),
 
-  // ── Events ────────────────────────────────────────────────
-  onGenerationProgress: (callback: (...args: unknown[]) => void) => {
-    ipcRenderer.on('gen:progress', (_event, ...args) => callback(...args))
-    return () => ipcRenderer.removeAllListeners('gen:progress')
-  },
-  onGenerationComplete: (callback: (...args: unknown[]) => void) => {
-    ipcRenderer.on('gen:complete', (_event, ...args) => callback(...args))
-    return () => ipcRenderer.removeAllListeners('gen:complete')
-  }
+  onQueueUpdate: (callback: (payload: unknown) => void) => subscribe('queue:update', callback),
+  onQueueJobProgress: (callback: (payload: unknown) => void) =>
+    subscribe('queue:job-progress', callback),
+  onQueueJobComplete: (callback: (payload: unknown) => void) =>
+    subscribe('queue:job-complete', callback),
+  onQueueJobFailed: (callback: (payload: unknown) => void) =>
+    subscribe('queue:job-failed', callback)
 }
 
 if (process.contextIsolated) {
@@ -104,8 +106,8 @@ if (process.contextIsolated) {
     console.error(error)
   }
 } else {
-  // @ts-ignore: Electron injects these globals in the non-isolated fallback path.
+  // @ts-ignore - Electron injects these globals in the non-isolated fallback path.
   window.electron = electronAPI
-  // @ts-ignore: Electron injects these globals in the non-isolated fallback path.
+  // @ts-ignore - Electron injects these globals in the non-isolated fallback path.
   window.manthan = manthanAPI
 }

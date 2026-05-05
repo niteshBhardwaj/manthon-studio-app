@@ -21,6 +21,7 @@ interface Preferences {
   defaultAspectRatio: string
   defaultResolution: string
   enabledModels: string[]
+  notificationsEnabled: boolean
 }
 
 interface Template {
@@ -76,7 +77,8 @@ const DEFAULT_PREFERENCES: Preferences = {
   defaultProvider: null,
   defaultAspectRatio: '16:9',
   defaultResolution: '1080p',
-  enabledModels: MODEL_REGISTRY.map((model) => model.id)
+  enabledModels: MODEL_REGISTRY.map((model) => model.id),
+  notificationsEnabled: true
 }
 
 // ── JSON → SQLite Migration ─────────────────────────────────
@@ -129,10 +131,10 @@ function migrateFromJson(): void {
       const prefs = data.preferences
       if (prefs) {
         for (const [key, value] of Object.entries(prefs)) {
-          databaseManager.run(
-            'INSERT OR REPLACE INTO preferences (key, value) VALUES (?, ?)',
-            [key, JSON.stringify(value)]
-          )
+          databaseManager.run('INSERT OR REPLACE INTO preferences (key, value) VALUES (?, ?)', [
+            key,
+            JSON.stringify(value)
+          ])
         }
         console.log('[Migration] Migrated preferences.')
       }
@@ -184,10 +186,10 @@ function seedDefaults(): void {
       [key]
     )
     if (!existing) {
-      databaseManager.run(
-        'INSERT INTO preferences (key, value) VALUES (?, ?)',
-        [key, JSON.stringify(value)]
-      )
+      databaseManager.run('INSERT INTO preferences (key, value) VALUES (?, ?)', [
+        key,
+        JSON.stringify(value)
+      ])
     }
   }
 }
@@ -247,14 +249,14 @@ export const appStore = {
         prefs[row.key] = row.value
       }
     }
-    return prefs as Preferences
+    return prefs as unknown as Preferences
   },
 
-  setPreference<K extends keyof Preferences>(key: K, value: Preferences[K]): void {
-    databaseManager.run(
-      'INSERT OR REPLACE INTO preferences (key, value) VALUES (?, ?)',
-      [key, JSON.stringify(value)]
-    )
+  setPreference(key: string, value: unknown): void {
+    databaseManager.run('INSERT OR REPLACE INTO preferences (key, value) VALUES (?, ?)', [
+      key,
+      JSON.stringify(value)
+    ])
   },
 
   getEnabledModels(): string[] {
@@ -305,9 +307,12 @@ export const appStore = {
   // ── Templates ──────────────────────────────────────────────
 
   getTemplates(): Template[] {
-    const rows = databaseManager.query<{ id: string; name: string; prompt: string; category: string }>(
-      'SELECT id, name, prompt, category FROM prompt_templates ORDER BY created_at ASC'
-    )
+    const rows = databaseManager.query<{
+      id: string
+      name: string
+      prompt: string
+      category: string
+    }>('SELECT id, name, prompt, category FROM prompt_templates ORDER BY created_at ASC')
     return rows
   },
 

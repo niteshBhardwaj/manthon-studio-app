@@ -5,7 +5,7 @@
 
 import { create } from 'zustand'
 
-type SidebarTab = 'create' | 'history' | 'assets' | 'templates' | 'settings'
+type SidebarTab = 'create' | 'queue' | 'history' | 'assets' | 'templates' | 'settings'
 type ModalType = 'settings' | 'api-keys' | 'prompt-builder' | null
 
 interface AppState {

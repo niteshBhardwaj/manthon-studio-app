@@ -13,7 +13,6 @@ import {
   Grid,
   List,
   Trash2,
-  Download,
   X,
   FileAudio,
   FileVideo,
@@ -118,15 +117,21 @@ export function AssetsPage() {
   // Type icon
   const TypeIcon = ({ type }: { type: string }) => {
     switch (type) {
-      case 'video': return <FileVideo className="w-4 h-4 text-blue-400" />
-      case 'audio': return <FileAudio className="w-4 h-4 text-emerald-400" />
-      default: return <FileImage className="w-4 h-4 text-amber-400" />
+      case 'video':
+        return <FileVideo className="w-4 h-4 text-blue-400" />
+      case 'audio':
+        return <FileAudio className="w-4 h-4 text-emerald-400" />
+      default:
+        return <FileImage className="w-4 h-4 text-amber-400" />
     }
   }
 
   // Filter counts
   const typeCounts = assets.reduce(
-    (acc, a) => { acc[a.type] = (acc[a.type] || 0) + 1; return acc },
+    (acc, a) => {
+      acc[a.type] = (acc[a.type] || 0) + 1
+      return acc
+    },
     {} as Record<string, number>
   )
 
@@ -191,7 +196,10 @@ export function AssetsPage() {
           return (
             <button
               key={tab.key}
-              onClick={() => { setFilterType(tab.key); setSelectedIds(new Set()) }}
+              onClick={() => {
+                setFilterType(tab.key)
+                setSelectedIds(new Set())
+              }}
               className={cn(
                 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
                 filterType === tab.key
@@ -238,7 +246,9 @@ export function AssetsPage() {
                       src={`asset://${asset.storage_path}`}
                       alt={asset.filename}
                       className="w-full h-full object-cover"
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                      onError={(e) => {
+                        ;(e.target as HTMLImageElement).style.display = 'none'
+                      }}
                     />
                   ) : (
                     <TypeIcon type={asset.type} />
@@ -250,7 +260,9 @@ export function AssetsPage() {
                 </div>
                 {/* Info */}
                 <div className="p-2.5">
-                  <p className="text-[11px] font-medium text-text-primary truncate">{asset.filename}</p>
+                  <p className="text-[11px] font-medium text-text-primary truncate">
+                    {asset.filename}
+                  </p>
                   <p className="text-[10px] text-text-muted mt-0.5">
                     {formatSize(asset.size_bytes)} · {formatDate(asset.created_at)}
                   </p>

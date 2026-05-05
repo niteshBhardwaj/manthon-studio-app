@@ -3,20 +3,27 @@
 // Navigation with cinematic minimal design
 // ============================================================
 
-import { Plus, Clock, FolderOpen, Sparkles, Settings } from 'lucide-react'
+import { Plus, Clock, FolderOpen, Sparkles, Settings, ListOrdered } from 'lucide-react'
+import { type JSX } from 'react'
 import { useAppStore } from '../../stores/app-store'
+import { useQueueStore } from '../../stores/queue-store'
 import { cn } from '../../lib/utils'
 import { AnimatedBackground } from '../ui/animated-background'
 
 const navItems = [
   { id: 'create' as const, icon: Plus, label: 'Create' },
+  { id: 'queue' as const, icon: ListOrdered, label: 'Queue' },
   { id: 'history' as const, icon: Clock, label: 'History' },
   { id: 'assets' as const, icon: FolderOpen, label: 'Assets' },
   { id: 'templates' as const, icon: Sparkles, label: 'Templates' }
 ]
 
-export function Sidebar() {
+export function Sidebar(): JSX.Element {
   const { activeSidebarTab, setSidebarTab, openModal } = useAppStore()
+  const pendingCount = useQueueStore(
+    (state) =>
+      state.jobs.filter((job) => job.status === 'pending' || job.status === 'running').length
+  )
 
   return (
     <div className="h-full flex items-center justify-center pl-4 py-4 relative z-10">
@@ -27,7 +34,9 @@ export function Sidebar() {
         <nav className="flex flex-col gap-2 w-full px-2">
           <AnimatedBackground
             defaultValue={activeSidebarTab}
-            onValueChange={(v) => setSidebarTab(v as any)}
+            onValueChange={(value) =>
+              setSidebarTab(value as 'create' | 'queue' | 'history' | 'assets' | 'templates')
+            }
             className="rounded-full bg-accent/20"
             transition={{ type: 'spring', bounce: 0.2, duration: 0.4 }}
           >
@@ -41,7 +50,7 @@ export function Sidebar() {
                   data-id={item.id}
                   type="button"
                   className={cn(
-                    'w-full aspect-square flex items-center justify-center rounded-full transition-colors duration-200 z-10',
+                    'relative z-10 flex w-full aspect-square items-center justify-center rounded-full transition-colors duration-200',
                     isActive
                       ? 'text-accent'
                       : 'text-text-muted hover:text-text-secondary hover:bg-bg-hover/50'
@@ -49,6 +58,11 @@ export function Sidebar() {
                   title={item.label}
                 >
                   <Icon className="w-5 h-5" />
+                  {item.id === 'queue' && pendingCount > 0 ? (
+                    <span className="absolute right-1 top-1 min-w-4 rounded-full bg-accent px-1 text-[9px] font-semibold leading-4 text-white">
+                      {pendingCount > 9 ? '9+' : pendingCount}
+                    </span>
+                  ) : null}
                 </button>
               )
             })}

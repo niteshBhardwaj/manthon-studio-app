@@ -6,13 +6,10 @@
 import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowRight, Loader2, Plus } from 'lucide-react'
-import {
-  useGenerationStore,
-  type BinaryInput,
-  type GenerationJob
-} from '../../stores/generation-store'
+import { useGenerationStore, type BinaryInput } from '../../stores/generation-store'
 import { useModelStore } from '../../stores/model-store'
 import { useProviderStore } from '../../stores/provider-store'
+import { useProjectStore } from '../../stores/project-store'
 import { buildPayload } from '../../lib/build-payload'
 import useClickOutside from '../../hooks/useClickOutside'
 import {
@@ -32,8 +29,6 @@ import {
   BottomActionBar,
   SelectedOptionsDisplay
 } from './prompt'
-
-type JobResult = GenerationJob['result']
 
 export function PromptInput(): JSX.Element {
   const {
@@ -57,12 +52,11 @@ export function PromptInput(): JSX.Element {
     setEndFrame,
     addReferenceImage,
     removeReferenceImage,
-    clearReferenceImages,
-    addJob,
-    updateJob
+    clearReferenceImages
   } = useGenerationStore()
   const { enabledModelIds } = useModelStore()
   const { setActiveProvider } = useProviderStore()
+  const { activeProjectId } = useProjectStore()
   const [isFocused, setIsFocused] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [isConfigOpen, setIsConfigOpen] = useState(false)
@@ -169,100 +163,58 @@ export function PromptInput(): JSX.Element {
           activeMode
         })
 
-        const jobId = `gen-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}`
-        const job: GenerationJob = {
-          id: jobId,
-          type: payload.contentType,
-          status: 'generating',
-          prompt: payload.params.prompt,
-          negativePrompt:
-            'negativePrompt' in payload.params ? payload.params.negativePrompt : undefined,
-          provider: payload.providerId,
-          model: selectedModelDescriptor.id,
-          config: {
-            contentType: payload.contentType,
-            activeMode,
-            batchCount: 1,
-            capabilityValues: { ...capabilityValues, batch_count: 1 }
-          },
-          image: startFrame ?? undefined,
-          lastFrame: endFrame ?? undefined,
-          referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
-          progress: 0,
-          startedAt: Date.now()
-        }
-
-        addJob(job)
-
         if (!window.manthan) {
-          setTimeout(() => {
-            updateJob(jobId, { status: 'completed', progress: 100, completedAt: Date.now() })
-          }, 1500)
           continue
         }
 
         try {
           await window.manthan.setActiveProvider(payload.providerId)
 
+          const queueInput = {
+            projectId: activeProjectId,
+            type: payload.contentType,
+            prompt: payload.params.prompt,
+            negativePrompt:
+              'negativePrompt' in payload.params ? payload.params.negativePrompt : undefined,
+            provider: payload.providerId,
+            model: selectedModelDescriptor.id,
+            config: {
+              contentType: payload.contentType,
+              activeMode,
+              batchCount: 1,
+              capabilityValues: { ...capabilityValues, batch_count: 1 },
+              providerParams: payload.params
+            },
+            inputAssets: [
+              ...(startFrame ? [{ ...startFrame, referenceType: 'start-frame' as const }] : []),
+              ...(endFrame ? [{ ...endFrame, referenceType: 'end-frame' as const }] : []),
+              ...referenceImages.map((image) => ({
+                ...image,
+                referenceType: 'reference' as const
+              }))
+            ]
+          }
+
           if (payload.contentType === 'image') {
-            const result = (await window.manthan.generateImage(
-              payload.params as unknown as Record<string, unknown>
-            )) as JobResult
-            updateJob(jobId, {
-              status: 'completed',
-              progress: 100,
-              completedAt: Date.now(),
-              result
-            })
+            await window.manthan.generateImage(queueInput)
             continue
           }
 
           if (payload.contentType === 'audio') {
-            const result = (await window.manthan.generateAudio(
-              payload.params as unknown as Record<string, unknown>
-            )) as JobResult
-            updateJob(jobId, {
-              status: 'completed',
-              progress: 100,
-              completedAt: Date.now(),
-              result
-            })
+            await window.manthan.generateAudio(queueInput)
             continue
           }
 
-          const operation = (await window.manthan.generateVideo(
-            payload.params as unknown as Record<string, unknown>
-          )) as {
-            id?: string
-            status?: string
-            error?: string
-          }
-
-          if (operation.status === 'failed') {
-            updateJob(jobId, {
-              status: 'failed',
-              error: operation.error || 'Generation failed',
-              completedAt: Date.now()
-            })
-            continue
-          }
-
-          if (operation.id) {
-            updateJob(jobId, { id: operation.id })
-          }
+          await window.manthan.generateVideo(queueInput)
         } catch (jobError) {
-          console.error(`Job ${jobId} failed:`, jobError)
+          console.error('Job enqueue failed:', jobError)
 
           let errorMessage = jobError instanceof Error ? jobError.message : String(jobError)
           if (errorMessage.includes('Provider not initialized')) {
             errorMessage = 'Provider not initialized. Please add your API key in the settings.'
           }
 
-          updateJob(jobId, {
-            status: 'failed',
-            error: errorMessage,
-            completedAt: Date.now()
-          })
+          throw new Error(errorMessage)
         }
       }
     } catch (error) {
@@ -272,7 +224,6 @@ export function PromptInput(): JSX.Element {
     }
   }, [
     activeMode,
-    addJob,
     batchCount,
     capabilityValues,
     endFrame,
@@ -282,7 +233,7 @@ export function PromptInput(): JSX.Element {
     referenceImages,
     selectedModelDescriptor,
     startFrame,
-    updateJob
+    activeProjectId
   ])
 
   // ── Computed values ────────────────────────────────────
@@ -299,7 +250,7 @@ export function PromptInput(): JSX.Element {
       return 'Describe how to transform the uploaded images...'
     }
     return 'Describe what you want to create...'
-  }, [activeMode, contentType, startFrame])
+  }, [activeMode, contentType, referenceImages.length])
 
   const estimatedCredits = useMemo(() => {
     const base =

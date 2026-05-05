@@ -5,12 +5,18 @@
 
 import { useState, useRef, useEffect, type JSX } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronDown, Plus, Check, Trash2, FolderOpen } from 'lucide-react'
+import { ChevronDown, Plus, Check, Trash2 } from 'lucide-react'
 import { useProjectStore } from '../../stores/project-store'
 
 const PROJECT_COLORS = [
-  '#6366f1', '#f43f5e', '#10b981', '#f59e0b',
-  '#06b6d4', '#8b5cf6', '#f97316', '#64748b'
+  '#6366f1',
+  '#f43f5e',
+  '#10b981',
+  '#f59e0b',
+  '#06b6d4',
+  '#8b5cf6',
+  '#f97316',
+  '#64748b'
 ]
 
 export function ProjectSwitcher(): JSX.Element {
@@ -68,16 +74,18 @@ export function ProjectSwitcher(): JSX.Element {
     <div ref={dropdownRef} className="relative">
       {/* Trigger Button */}
       <button
-        onClick={() => { setIsOpen(!isOpen); setIsCreating(false); setConfirmDelete(null) }}
+        onClick={() => {
+          setIsOpen(!isOpen)
+          setIsCreating(false)
+          setConfirmDelete(null)
+        }}
         className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium text-text-secondary transition-all duration-200 hover:bg-bg-hover hover:text-text-primary"
       >
         <span
           className="h-2.5 w-2.5 rounded-full shadow-sm"
           style={{ backgroundColor: activeProject?.color ?? '#6366f1' }}
         />
-        <span className="max-w-[120px] truncate">
-          {activeProject?.name ?? 'Personal'}
-        </span>
+        <span className="max-w-[120px] truncate">{activeProject?.name ?? 'Personal'}</span>
         <ChevronDown
           className={`h-3 w-3 text-text-muted transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
         />
@@ -176,7 +184,10 @@ export function ProjectSwitcher(): JSX.Element {
                   onChange={(e) => setNewName(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleCreate()
-                    if (e.key === 'Escape') { setIsCreating(false); setNewName('') }
+                    if (e.key === 'Escape') {
+                      setIsCreating(false)
+                      setNewName('')
+                    }
                   }}
                   className="mb-2 h-7 w-full rounded-lg border border-border-subtle bg-bg-input px-2.5 text-xs text-text-primary placeholder:text-text-muted focus:border-accent/40 focus:outline-none"
                 />
@@ -187,7 +198,9 @@ export function ProjectSwitcher(): JSX.Element {
                       key={color}
                       onClick={() => setSelectedColor(color)}
                       className={`h-5 w-5 rounded-full border-2 transition-all ${
-                        selectedColor === color ? 'border-text-primary scale-110' : 'border-transparent'
+                        selectedColor === color
+                          ? 'border-text-primary scale-110'
+                          : 'border-transparent'
                       }`}
                       style={{ backgroundColor: color }}
                     />
@@ -195,7 +208,10 @@ export function ProjectSwitcher(): JSX.Element {
                 </div>
                 <div className="flex gap-1.5">
                   <button
-                    onClick={() => { setIsCreating(false); setNewName('') }}
+                    onClick={() => {
+                      setIsCreating(false)
+                      setNewName('')
+                    }}
                     className="flex-1 rounded-lg py-1.5 text-[11px] text-text-muted hover:bg-bg-hover hover:text-text-primary"
                   >
                     Cancel

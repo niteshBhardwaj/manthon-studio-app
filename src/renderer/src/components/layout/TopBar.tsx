@@ -3,7 +3,7 @@
 // Search, active model status, and settings
 // ============================================================
 
-import { Search, Settings, Image as ImageIcon, Music, Video } from 'lucide-react'
+import { Search, Settings } from 'lucide-react'
 import { type JSX } from 'react'
 import { useAppStore } from '../../stores/app-store'
 import { ProjectSwitcher } from './ProjectSwitcher'

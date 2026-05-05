@@ -5,7 +5,7 @@
 
 import { app } from 'electron'
 import { join, extname } from 'path'
-import { mkdirSync, existsSync, statSync, unlinkSync, readdirSync, copyFileSync } from 'fs'
+import { mkdirSync, existsSync, statSync, unlinkSync } from 'fs'
 import { writeFile, readFile, stat, readdir, rm } from 'fs/promises'
 import { randomUUID } from 'crypto'
 import { databaseManager } from './db'
@@ -106,7 +106,19 @@ class AssetManager {
     databaseManager.run(
       `INSERT INTO assets (id, project_id, filename, mime_type, size_bytes, type, source, storage_path, metadata, tags, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?)`,
-      [id, projectId, filename, options.mimeType, sizeBytes, type, source, storagePath, metadata, now, now]
+      [
+        id,
+        projectId,
+        filename,
+        options.mimeType,
+        sizeBytes,
+        type,
+        source,
+        storagePath,
+        metadata,
+        now,
+        now
+      ]
     )
 
     return this.getAsset(id)!
@@ -156,10 +168,7 @@ class AssetManager {
 
   /** Get a single asset by ID */
   getAsset(id: string): Asset | null {
-    const row = databaseManager.queryOne<RawAssetRow>(
-      'SELECT * FROM assets WHERE id = ?',
-      [id]
-    )
+    const row = databaseManager.queryOne<RawAssetRow>('SELECT * FROM assets WHERE id = ?', [id])
     return row ? this.hydrate(row) : null
   }
 
@@ -277,7 +286,8 @@ class AssetManager {
     // Cache size
     breakdown.cache = await this.getDirectorySize(this.cacheRoot)
 
-    breakdown.total = breakdown.video + breakdown.image + breakdown.audio + breakdown.cache + breakdown.database
+    breakdown.total =
+      breakdown.video + breakdown.image + breakdown.audio + breakdown.cache + breakdown.database
 
     return breakdown
   }

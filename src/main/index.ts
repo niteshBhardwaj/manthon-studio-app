@@ -11,6 +11,7 @@ import { registerIpcHandlers, initializeStoredProviders } from './ipc'
 import { databaseManager } from './store/db'
 import { assetManager } from './store/asset-manager'
 import { appStore } from './store/app-store'
+import { queueManager } from './queue/queue-manager'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -68,6 +69,9 @@ app.whenReady().then(async () => {
   // Initialize providers with stored API keys
   await initializeStoredProviders()
 
+  // Initialize persistent queue processing after storage and providers are ready
+  queueManager.initialize()
+
   createWindow()
 
   app.on('activate', () => {
@@ -83,5 +87,6 @@ app.on('window-all-closed', () => {
 
 // Graceful database shutdown
 app.on('before-quit', () => {
+  queueManager.shutdown()
   databaseManager.close()
 })
