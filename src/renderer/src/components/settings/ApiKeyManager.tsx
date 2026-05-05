@@ -3,6 +3,7 @@ import {
   Check,
   Eye,
   EyeOff,
+  HardDrive,
   Image as ImageIcon,
   Loader2,
   Music,
@@ -17,8 +18,9 @@ import { cn } from '../../lib/utils'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog'
 import { Input } from '../ui/input'
 import { Button } from '../ui/button'
+import { StorageDashboard } from './StorageDashboard'
 
-type SettingsTab = 'models' | 'keys'
+type SettingsTab = 'models' | 'keys' | 'storage'
 
 const contentTypeMeta: Record<ContentType, { label: string; icon: typeof ImageIcon }> = {
   image: { label: 'Image Models', icon: ImageIcon },
@@ -90,7 +92,8 @@ export function ApiKeyManager(): JSX.Element {
             {(
               [
                 { id: 'models', label: 'Models', icon: Settings2 },
-                { id: 'keys', label: 'Keys', icon: Check }
+                { id: 'keys', label: 'Keys', icon: Check },
+                { id: 'storage', label: 'Storage', icon: HardDrive }
               ] as const
             ).map(({ id, label, icon: Icon }) => (
               <button
@@ -172,7 +175,7 @@ export function ApiKeyManager(): JSX.Element {
                 )
               })}
             </div>
-          ) : (
+          ) : activeTab === 'keys' ? (
             <div className="space-y-4">
               {keyGroups.map((group) => {
                 const groupModels = MODEL_REGISTRY.filter((model) =>
@@ -328,6 +331,8 @@ export function ApiKeyManager(): JSX.Element {
                 )
               })}
             </div>
+          ) : (
+            <StorageDashboard />
           )}
         </div>
 

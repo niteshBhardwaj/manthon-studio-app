@@ -208,19 +208,22 @@ export const appStore = {
   addToHistory(operation: GenerationOperation): void {
     databaseManager.run(
       `INSERT OR REPLACE INTO generations
-        (id, project_id, type, status, prompt, provider, model, config, error, progress, started_at, completed_at, created_at)
-       VALUES (?, 'default', ?, ?, ?, ?, ?, '{}', ?, ?, ?, ?, ?)`,
+        (id, project_id, type, status, prompt, provider, model, config, result_asset_id, error, progress, started_at, completed_at, starred, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, '{}', ?, ?, ?, ?, ?, ?, ?)`,
       [
         operation.id,
+        operation.projectId ?? 'default',
         operation.type ?? 'video',
         operation.status ?? 'generating',
         operation.prompt ?? '',
         operation.provider ?? 'unknown',
         operation._operationName ?? 'unknown',
+        operation.resultAssetId ?? null,
         operation.error ?? null,
         operation.progress ?? 0,
         operation.startedAt ?? Date.now(),
         operation.completedAt ?? null,
+        operation.starred ? 1 : 0,
         Date.now()
       ]
     )

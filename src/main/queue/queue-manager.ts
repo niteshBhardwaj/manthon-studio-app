@@ -367,7 +367,9 @@ class QueueManager {
       type: job.type,
       status: 'completed',
       prompt: job.prompt,
+      projectId: job.project_id ?? 'default',
       progress: 100,
+      resultAssetId: asset?.id,
       startedAt: job.started_at ?? job.created_at,
       completedAt,
       result: {
@@ -437,6 +439,7 @@ class QueueManager {
       type: job.type,
       status: 'failed',
       prompt: job.prompt,
+      projectId: job.project_id ?? 'default',
       progress: this.progressByJob.get(job.id) ?? 0,
       error,
       startedAt: job.started_at ?? job.created_at,

@@ -51,6 +51,15 @@ const manthanAPI = {
   getPreferences: () => ipcRenderer.invoke('preferences:get'),
   setPreference: (key: string, value: unknown) => ipcRenderer.invoke('preferences:set', key, value),
 
+  getStorageBreakdown: () => ipcRenderer.invoke('storage:breakdown'),
+  getSystemDiskInfo: () => ipcRenderer.invoke('storage:disk-info'),
+  cleanupCache: () => ipcRenderer.invoke('storage:cleanup-cache'),
+  getRetentionPolicy: () => ipcRenderer.invoke('storage:get-policy'),
+  setRetentionPolicy: (policy: Record<string, unknown>) =>
+    ipcRenderer.invoke('storage:set-policy', policy),
+  applyRetentionPolicy: (policy?: Record<string, unknown>) =>
+    ipcRenderer.invoke('storage:apply-policy', policy),
+
   saveMedia: (data: string, filename: string, mimeType: string) =>
     ipcRenderer.invoke('file:save', data, filename, mimeType),
   openFile: () => ipcRenderer.invoke('file:open'),
@@ -76,7 +85,6 @@ const manthanAPI = {
   deleteAsset: (id: string) => ipcRenderer.invoke('asset:delete', id),
   importAssets: (projectId?: string) => ipcRenderer.invoke('asset:import', projectId),
   getStorageStats: () => ipcRenderer.invoke('asset:stats'),
-  cleanupCache: () => ipcRenderer.invoke('asset:cleanup-cache'),
   openStorageFolder: () => ipcRenderer.invoke('storage:open-folder'),
 
   listProjects: () => ipcRenderer.invoke('project:list'),

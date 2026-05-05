@@ -11,6 +11,12 @@ import type {
   QueueJobProgressPayload,
   QueueState
 } from '../main/queue/types'
+import type {
+  DiskInfo,
+  RetentionPolicy,
+  RetentionResult,
+  StorageReport
+} from '../main/store/storage-manager'
 
 interface ManthanAPI {
   saveApiKey: (provider: string, key: string) => Promise<{ success: boolean; error?: string }>
@@ -76,6 +82,13 @@ interface ManthanAPI {
   getPreferences: () => Promise<Record<string, unknown>>
   setPreference: (key: string, value: unknown) => Promise<{ success: boolean }>
 
+  getStorageBreakdown: () => Promise<StorageReport>
+  getSystemDiskInfo: () => Promise<DiskInfo>
+  cleanupCache: () => Promise<number>
+  getRetentionPolicy: () => Promise<RetentionPolicy>
+  setRetentionPolicy: (policy: RetentionPolicy) => Promise<{ success: boolean }>
+  applyRetentionPolicy: (policy?: RetentionPolicy) => Promise<RetentionResult>
+
   saveMedia: (data: string, filename: string, mimeType: string) => Promise<{ path: string }>
   openFile: () => Promise<{
     path: string
@@ -103,15 +116,7 @@ interface ManthanAPI {
   readAsset: (id: string) => Promise<string | null>
   deleteAsset: (id: string) => Promise<boolean>
   importAssets: (projectId?: string) => Promise<AssetInfo[]>
-  getStorageStats: () => Promise<{
-    video: number
-    image: number
-    audio: number
-    cache: number
-    database: number
-    total: number
-  }>
-  cleanupCache: () => Promise<number>
+  getStorageStats: () => Promise<StorageReport>
   openStorageFolder: () => Promise<void>
 
   listProjects: () => Promise<ProjectInfo[]>

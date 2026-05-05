@@ -76,11 +76,14 @@ export interface GenerationOperation {
   type: Modality
   status: GenerationStatus
   prompt: string
+  projectId?: string
   progress?: number
   result?: GenerationResult
+  resultAssetId?: string
   error?: string
   startedAt: number
   completedAt?: number
+  starred?: boolean
   // Internal — the raw operation name for polling
   _operationName?: string
 }

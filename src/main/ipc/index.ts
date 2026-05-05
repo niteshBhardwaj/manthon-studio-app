@@ -12,6 +12,7 @@ import { keyStore } from '../store/key-store'
 import { appStore } from '../store/app-store'
 import { assetManager } from '../store/asset-manager'
 import { projectManager } from '../store/project-manager'
+import { storageManager } from '../store/storage-manager'
 import type { EnqueueJobInput } from '../queue/types'
 import { queueManager } from '../queue/queue-manager'
 
@@ -320,15 +321,39 @@ export function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('asset:stats', async () => {
-    return assetManager.getStorageStats()
+    return storageManager.getStorageBreakdown()
   })
 
   ipcMain.handle('asset:cleanup-cache', async () => {
-    return assetManager.cleanupCache()
+    return storageManager.cleanupCache()
   })
 
   ipcMain.handle('storage:open-folder', async () => {
     shell.openPath(app.getPath('userData'))
+  })
+
+  ipcMain.handle('storage:breakdown', async () => {
+    return storageManager.getStorageBreakdown()
+  })
+
+  ipcMain.handle('storage:disk-info', async () => {
+    return storageManager.getSystemDiskInfo()
+  })
+
+  ipcMain.handle('storage:cleanup-cache', async () => {
+    return storageManager.cleanupCache()
+  })
+
+  ipcMain.handle('storage:get-policy', async () => {
+    return storageManager.getRetentionPolicy()
+  })
+
+  ipcMain.handle('storage:set-policy', async (_event, policy) => {
+    return storageManager.setRetentionPolicy(policy)
+  })
+
+  ipcMain.handle('storage:apply-policy', async (_event, policy) => {
+    return storageManager.applyRetentionPolicy(policy)
   })
 
   // ── Projects ─────────────────────────────────────────────

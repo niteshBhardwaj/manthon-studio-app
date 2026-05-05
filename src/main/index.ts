@@ -11,6 +11,7 @@ import { registerIpcHandlers, initializeStoredProviders } from './ipc'
 import { databaseManager } from './store/db'
 import { assetManager } from './store/asset-manager'
 import { appStore } from './store/app-store'
+import { storageManager } from './store/storage-manager'
 import { queueManager } from './queue/queue-manager'
 
 function createWindow(): void {
@@ -61,6 +62,7 @@ app.whenReady().then(async () => {
   // Initialize database & asset storage
   databaseManager.initialize()
   assetManager.initialize()
+  storageManager.initialize()
   appStore.initialize()
 
   // Register all IPC handlers
@@ -86,7 +88,11 @@ app.on('window-all-closed', () => {
 })
 
 // Graceful database shutdown
-app.on('before-quit', () => {
+app.on('before-quit', async () => {
+  const policy = storageManager.getRetentionPolicy()
+  if (policy.clearCacheOnExit) {
+    await storageManager.cleanupCache()
+  }
   queueManager.shutdown()
   databaseManager.close()
 })
