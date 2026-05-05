@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Clock, Video, Image as ImageIcon, Music, Trash2, Search, RotateCcw } from 'lucide-react'
 import { cn } from '../lib/utils'
+import { useProjectStore } from '../stores/project-store'
 
 interface HistoryItem {
   id: string
@@ -22,6 +23,7 @@ export function HistoryPage() {
   const [history, setHistory] = useState<HistoryItem[]>([])
   const [filter, setFilter] = useState<'all' | 'video' | 'image' | 'audio'>('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const { activeProjectId } = useProjectStore()
 
   useEffect(() => {
     if (window.manthan) {
@@ -29,7 +31,7 @@ export function HistoryPage() {
         setHistory(data as unknown as HistoryItem[])
       })
     }
-  }, [])
+  }, [activeProjectId])
 
   const filtered = history.filter((item) => {
     if (filter !== 'all' && item.type !== filter) return false

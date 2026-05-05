@@ -74,6 +74,17 @@ const manthanAPI = {
   cleanupCache: () => ipcRenderer.invoke('asset:cleanup-cache'),
   openStorageFolder: () => ipcRenderer.invoke('storage:open-folder'),
 
+  // ── Projects ───────────────────────────────────────────────
+  listProjects: () => ipcRenderer.invoke('project:list'),
+  createProject: (options: { name: string; description?: string; color?: string; icon?: string }) =>
+    ipcRenderer.invoke('project:create', options),
+  updateProject: (
+    id: string,
+    updates: { name?: string; description?: string; color?: string; icon?: string }
+  ) => ipcRenderer.invoke('project:update', id, updates),
+  deleteProject: (id: string) => ipcRenderer.invoke('project:delete', id),
+  getProjectColors: () => ipcRenderer.invoke('project:colors'),
+
   // ── Events ────────────────────────────────────────────────
   onGenerationProgress: (callback: (...args: unknown[]) => void) => {
     ipcRenderer.on('gen:progress', (_event, ...args) => callback(...args))

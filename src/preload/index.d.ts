@@ -107,9 +107,37 @@ interface ManthanAPI {
   cleanupCache: () => Promise<number>
   openStorageFolder: () => Promise<void>
 
+  // Projects
+  listProjects: () => Promise<ProjectInfo[]>
+  createProject: (options: {
+    name: string
+    description?: string
+    color?: string
+    icon?: string
+  }) => Promise<ProjectInfo>
+  updateProject: (
+    id: string,
+    updates: { name?: string; description?: string; color?: string; icon?: string }
+  ) => Promise<ProjectInfo | null>
+  deleteProject: (id: string) => Promise<{ success: boolean }>
+  getProjectColors: () => Promise<string[]>
+
   // Events
   onGenerationProgress: (callback: (...args: unknown[]) => void) => () => void
   onGenerationComplete: (callback: (...args: unknown[]) => void) => () => void
+}
+
+interface ProjectInfo {
+  id: string
+  name: string
+  description: string
+  color: string
+  icon: string
+  created_at: number
+  updated_at: number
+  archived: number
+  generation_count?: number
+  asset_count?: number
 }
 
 interface AssetInfo {

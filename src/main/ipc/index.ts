@@ -11,6 +11,7 @@ import { providerRegistry } from '../providers/registry'
 import { keyStore } from '../store/key-store'
 import { appStore } from '../store/app-store'
 import { assetManager } from '../store/asset-manager'
+import { projectManager } from '../store/project-manager'
 import { VideoGenParams, ImageGenParams, AudioGenParams } from '../providers/base'
 
 export function registerIpcHandlers(): void {
@@ -330,6 +331,41 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('storage:open-folder', async () => {
     shell.openPath(app.getPath('userData'))
+  })
+
+  // ── Projects ─────────────────────────────────────────────
+  ipcMain.handle('project:list', async () => {
+    return projectManager.listProjects()
+  })
+
+  ipcMain.handle(
+    'project:create',
+    async (
+      _event,
+      options: { name: string; description?: string; color?: string; icon?: string }
+    ) => {
+      return projectManager.createProject(options)
+    }
+  )
+
+  ipcMain.handle(
+    'project:update',
+    async (
+      _event,
+      id: string,
+      updates: { name?: string; description?: string; color?: string; icon?: string }
+    ) => {
+      return projectManager.updateProject(id, updates)
+    }
+  )
+
+  ipcMain.handle('project:delete', async (_event, id: string) => {
+    projectManager.deleteProject(id)
+    return { success: true }
+  })
+
+  ipcMain.handle('project:colors', async () => {
+    return projectManager.getColors()
   })
 }
 

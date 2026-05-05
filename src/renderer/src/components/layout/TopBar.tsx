@@ -6,6 +6,7 @@
 import { Search, Settings, Image as ImageIcon, Music, Video } from 'lucide-react'
 import { type JSX } from 'react'
 import { useAppStore } from '../../stores/app-store'
+import { ProjectSwitcher } from './ProjectSwitcher'
 
 export function TopBar(): JSX.Element {
   const { searchQuery, setSearchQuery, openModal } = useAppStore()
@@ -23,6 +24,9 @@ export function TopBar(): JSX.Element {
             Manthan Studio
           </span>
         </div>
+
+        <span className="text-text-muted/30">·</span>
+        <ProjectSwitcher />
 
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-muted" />
