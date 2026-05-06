@@ -1,5 +1,5 @@
-import { type JSX, useEffect, useState, useRef } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { type JSX, useEffect, useState } from 'react'
+import { motion } from 'framer-motion'
 import {
   Search,
   Image as ImageIcon,
@@ -8,7 +8,6 @@ import {
   Upload,
   Check,
   X,
-  Play,
   File as FileIcon
 } from 'lucide-react'
 import {
@@ -26,8 +25,6 @@ import {
 } from '../ui/select'
 import { useAssetPicker } from '../../hooks/useAssetPicker'
 import { useProjectStore } from '../../stores/project-store'
-import { useModelStore } from '../../stores/model-store'
-import { getModelsByContentType } from '../../lib/model-capabilities'
 import { cn } from '../../lib/utils'
 import type { AssetInfo } from '../../../../preload/index.d'
 
@@ -45,7 +42,6 @@ export function AssetPickerModal({
   currentContentType
 }: AssetPickerModalProps): JSX.Element {
   const { projects } = useProjectStore()
-  const { enabledModelIds } = useModelStore()
   const {
     assets,
     loading,
@@ -66,8 +62,6 @@ export function AssetPickerModal({
   } = useAssetPicker()
 
   const [searchInput, setSearchInput] = useState(searchQuery)
-  const modalRef = useRef<HTMLDivElement>(null)
-
   useEffect(() => {
     const handler = setTimeout(() => {
       setSearchQuery(searchInput)
@@ -78,16 +72,13 @@ export function AssetPickerModal({
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden'
-      // Set typeFilter based on capabilities of current content type models
-      const models = getModelsByContentType(currentContentType as any, enabledModelIds)
-      // We could use this to filter supported inputs, but for now we keep it all or let user choose
     } else {
       document.body.style.overflow = ''
     }
     return () => {
       document.body.style.overflow = ''
     }
-  }, [isOpen, currentContentType, enabledModelIds])
+  }, [currentContentType, isOpen])
 
   const { setIsOpen: setMorphingOpen } = useMorphingDialog()
 
@@ -100,12 +91,6 @@ export function AssetPickerModal({
   const handleClose = () => {
     setMorphingOpen(false)
     onClose()
-  }
-
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      handleClose()
-    }
   }
 
   const handleUpload = async () => {

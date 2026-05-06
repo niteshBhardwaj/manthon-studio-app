@@ -58,6 +58,7 @@ interface GenerationState {
   activeMode: string | null
   batchCount: number
   selectedModel: string
+  extendingJobId: string | null
 
   // Frame inputs
   startFrame: BinaryInput | null
@@ -79,12 +80,16 @@ interface GenerationState {
   setActiveMode: (mode: string | null) => void
   setBatchCount: (batchCount: number) => void
   setSelectedModel: (model: string) => void
+  setExtendingJobId: (jobId: string | null) => void
 
   setStartFrame: (frame: BinaryInput | null) => void
   setEndFrame: (frame: BinaryInput | null) => void
   addReferenceImage: (img: BinaryInput) => void
   removeReferenceImage: (index: number) => void
   clearReferenceImages: () => void
+  clearPromptMedia: () => void
+  resetPromptAfterSubmit: () => void
+  loadJobIntoPrompt: (job: GenerationJob, options?: { extend?: boolean; prompt?: string }) => void
 
   setPanelExpanded: (expanded: boolean) => void
 
@@ -107,6 +112,7 @@ export const useGenerationStore = create<GenerationState>((set) => ({
       .batch_count ?? 1
   ),
   selectedModel: defaultImageModel?.id ?? 'gemini-3-pro-image-preview',
+  extendingJobId: null,
 
   // Frame inputs
   startFrame: null,
@@ -186,6 +192,7 @@ export const useGenerationStore = create<GenerationState>((set) => ({
         batchCount
       }
     }),
+  setExtendingJobId: (extendingJobId) => set({ extendingJobId }),
 
   setStartFrame: (frame) => set({ startFrame: frame }),
   setEndFrame: (frame) => set({ endFrame: frame }),
@@ -198,6 +205,38 @@ export const useGenerationStore = create<GenerationState>((set) => ({
       referenceImages: s.referenceImages.filter((_, i) => i !== index)
     })),
   clearReferenceImages: () => set({ referenceImages: [] }),
+  clearPromptMedia: () =>
+    set({
+      startFrame: null,
+      endFrame: null,
+      referenceImages: []
+    }),
+  resetPromptAfterSubmit: () =>
+    set({
+      prompt: '',
+      negativePrompt: '',
+      startFrame: null,
+      endFrame: null,
+      referenceImages: [],
+      extendingJobId: null
+    }),
+  loadJobIntoPrompt: (job, options) =>
+    set(() => ({
+      prompt: options?.prompt ?? (options?.extend ? '' : job.prompt),
+      negativePrompt: options?.extend ? '' : (job.negativePrompt ?? ''),
+      contentType: job.config.contentType,
+      selectedModel: job.model,
+      capabilityValues: {
+        ...job.config.capabilityValues,
+        batch_count: job.config.batchCount
+      },
+      activeMode: options?.extend ? 'frames' : job.config.activeMode,
+      batchCount: job.config.batchCount,
+      startFrame: options?.extend ? null : (job.image ?? null),
+      endFrame: job.lastFrame ?? null,
+      referenceImages: options?.extend ? [] : (job.referenceImages ?? []),
+      extendingJobId: options?.extend ? job.id : null
+    })),
 
   setPanelExpanded: (expanded) => set({ panelExpanded: expanded }),
 

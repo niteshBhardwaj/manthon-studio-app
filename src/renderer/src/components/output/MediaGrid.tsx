@@ -1,389 +1,354 @@
-// ============================================================
-// Manthan Studio - Media Grid & Cards
-// Output display for generated media (video, image, audio)
-// ============================================================
-
-import { type JSX } from 'react'
-import { useCallback } from 'react'
-import { motion } from 'framer-motion'
-import { Play, Download, Copy, Video, Image as ImageIcon, Music, Trash2, X } from 'lucide-react'
+import { type JSX, useEffect, useRef, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import {
+  Copy,
+  Download,
+  Image as ImageIcon,
+  Loader2,
+  Music,
+  RotateCcw,
+  Trash2,
+  Video,
+  X
+} from 'lucide-react'
 import { useGenerationStore, type GenerationJob } from '../../stores/generation-store'
+import { useQueueStore } from '../../stores/queue-store'
+import { useAppStore } from '../../stores/app-store'
 import { cn } from '../../lib/utils'
 import { Tilt } from '../motion-primitives/tilt'
-import {
-  MorphingDialog,
-  MorphingDialogTrigger,
-  MorphingDialogContent,
-  MorphingDialogClose,
-  MorphingDialogContainer
-} from '../motion-primitives/morphing-dialog'
+import { VideoPlayer } from '../player/VideoPlayer'
+import { VideoLightbox } from '../player/VideoLightbox'
 
 function formatJobConfig(job: GenerationJob): string {
   const parts: string[] = []
   const values = job.config.capabilityValues
 
-  const aspectRatio = values.aspect_ratio
-  if (typeof aspectRatio === 'string' && aspectRatio) parts.push(aspectRatio)
-
-  const resolution = values.resolution
-  if (typeof resolution === 'string' && resolution) parts.push(resolution.toUpperCase())
-
-  const duration = values.duration
-  if (typeof duration === 'number') parts.push(`${duration}s`)
-
-  const batchCount = job.config.batchCount
-  if (batchCount > 1) parts.push(`x${batchCount}`)
+  if (typeof values.aspect_ratio === 'string' && values.aspect_ratio) parts.push(values.aspect_ratio)
+  if (typeof values.resolution === 'string' && values.resolution) parts.push(values.resolution.toUpperCase())
+  if (typeof values.duration === 'number') parts.push(`${values.duration}s`)
+  if (job.config.batchCount > 1) parts.push(`x${job.config.batchCount}`)
 
   return parts.join(' · ')
 }
 
+function getJobSrc(job: GenerationJob): string {
+  if (!job.result) return ''
+  return job.result.uri || `data:${job.result.mimeType};base64,${job.result.data}`
+}
+
+function formatElapsed(startedAt: number, now: number): string {
+  const total = Math.max(0, Math.floor((now - startedAt) / 1000))
+  const minutes = Math.floor(total / 60)
+  const seconds = total % 60
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`
+}
+
+function estimateRemaining(job: GenerationJob, now: number): string {
+  if (job.progress <= 3) return 'Estimating...'
+  const elapsedMs = now - job.startedAt
+  const remainingMs = (elapsedMs / job.progress) * (100 - job.progress)
+  const totalSeconds = Math.max(0, Math.round(remainingMs / 1000))
+  if (totalSeconds < 60) return `~${totalSeconds}s remaining`
+  return `~${Math.floor(totalSeconds / 60)}m ${String(totalSeconds % 60).padStart(2, '0')}s remaining`
+}
+
+function ImageLightbox({
+  job,
+  isOpen,
+  onClose
+}: {
+  job: GenerationJob
+  isOpen: boolean
+  onClose: () => void
+}): JSX.Element {
+  return (
+    <AnimatePresence>
+      {isOpen && job.result ? (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/75 p-6 backdrop-blur-md"
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 18, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 18, scale: 0.98 }}
+            className="relative max-h-[92vh] w-full max-w-5xl overflow-hidden rounded-[2rem] border border-white/10 bg-bg-primary shadow-2xl"
+          >
+            <button
+              type="button"
+              onClick={onClose}
+              className="absolute right-5 top-5 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/35 text-white/80 backdrop-blur-md transition-colors hover:bg-black/50 hover:text-white"
+            >
+              <X className="h-4 w-4" />
+            </button>
+            <img
+              src={`data:${job.result.mimeType};base64,${job.result.data}`}
+              alt={job.prompt}
+              className="max-h-[78vh] w-full object-contain bg-black/40"
+            />
+            <div className="border-t border-border-subtle p-5">
+              <p className="text-sm text-text-secondary">{job.prompt}</p>
+              <p className="mt-2 text-xs text-text-muted">
+                {job.provider} · {job.model} · {formatJobConfig(job)}
+              </p>
+            </div>
+          </motion.div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
+  )
+}
+
 function MediaCard({ job }: { job: GenerationJob }): JSX.Element {
-  const { removeJob } = useGenerationStore()
-  const isGenerating = job.status === 'generating'
+  const { removeJob, loadJobIntoPrompt } = useGenerationStore()
+  const { cancelJob } = useQueueStore()
+  const { setSidebarTab, addToast } = useAppStore()
+  const [videoOpen, setVideoOpen] = useState(false)
+  const [imageOpen, setImageOpen] = useState(false)
+  const [now, setNow] = useState(Date.now())
+  const isGenerating = job.status === 'generating' || job.status === 'queued'
   const isCompleted = job.status === 'completed'
   const isFailed = job.status === 'failed'
 
-  const handleDownload = useCallback(async () => {
-    if (!job.result) return
-    if (window.manthan) {
-      const ext = job.result.mimeType.split('/')[1] || 'bin'
-      const filename = `manthan-${job.type}-${Date.now()}.${ext}`
-      await window.manthan.saveMedia(job.result.data, filename, job.result.mimeType)
-    }
-  }, [job])
+  useEffect(() => {
+    if (!isGenerating) return
+    const interval = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(interval)
+  }, [isGenerating])
+
+  const handleDownload = async (): Promise<void> => {
+    if (!job.result || !window.manthan) return
+    const ext = job.result.mimeType.split('/')[1] || 'bin'
+    const filename = `manthan-${job.type}-${Date.now()}.${ext}`
+    await window.manthan.saveMedia(job.result.data, filename, job.result.mimeType)
+    addToast({ title: 'Media downloaded', tone: 'success' })
+  }
+
+  const handleRerun = (): void => {
+    loadJobIntoPrompt(job)
+    setSidebarTab('create')
+    window.setTimeout(() => {
+      document.querySelector<HTMLTextAreaElement>('textarea')?.focus()
+    }, 120)
+  }
 
   const typeIcon =
     job.type === 'video' ? (
-      <Video className="h-3 w-3" />
+      <Video className="h-3.5 w-3.5" />
     ) : job.type === 'audio' ? (
-      <Music className="h-3 w-3" />
+      <Music className="h-3.5 w-3.5" />
     ) : (
-      <ImageIcon className="h-3 w-3" />
+      <ImageIcon className="h-3.5 w-3.5" />
     )
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-    >
-      <MorphingDialog
-        transition={{
-          type: 'spring',
-          bounce: 0.05,
-          duration: 0.25
-        }}
-      >
-        <MorphingDialogTrigger className="block w-full text-left focus:outline-none">
-          <Tilt rotationFactor={8} isRevese>
-            <div className="group relative overflow-hidden rounded-xl border border-border-subtle bg-bg-elevated transition-all hover:border-border">
-              <div
-                className={cn('relative overflow-hidden', job.type === 'audio' ? 'h-28' : 'aspect-video')}
-                style={{ background: 'var(--color-bg-primary)' }}
-              >
-        {isGenerating && (
+    <>
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+        <Tilt rotationFactor={8} isRevese>
           <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.75rem'
-            }}
-          >
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
-            <span className="text-xs text-text-muted">Generating...</span>
-            <div
-              style={{
-                width: '8rem',
-                height: '4px',
-                borderRadius: '9999px',
-                overflow: 'hidden',
-                background: 'var(--color-bg-elevated)'
-              }}
-            >
-              <motion.div
-                className="bg-accent"
-                style={{ height: '100%', borderRadius: '9999px' }}
-                initial={{ width: '0%' }}
-                animate={{ width: `${job.progress}%` }}
-              />
-            </div>
-          </div>
-        )}
-
-        {isCompleted && job.result && (
-          <>
-            {job.type === 'video' ? (
-              <video
-                src={job.result.uri || `data:${job.result.mimeType};base64,${job.result.data}`}
-                className="h-full w-full"
-                style={{ objectFit: 'cover' }}
-                muted
-                loop
-                onMouseEnter={(event) => (event.target as HTMLVideoElement).play()}
-                onMouseLeave={(event) => {
-                  const video = event.target as HTMLVideoElement
-                  video.pause()
-                  video.currentTime = 0
-                }}
-              />
-            ) : job.type === 'audio' ? (
-              <div
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.5rem'
-                }}
-              >
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/10">
-                  <Music className="h-5 w-5 text-emerald-400" />
-                </div>
-                <audio
-                  controls
-                  src={`data:${job.result.mimeType};base64,${job.result.data}`}
-                  style={{ width: '80%', height: '28px' }}
-                />
-              </div>
-            ) : (
-              <img
-                src={`data:${job.result.mimeType};base64,${job.result.data}`}
-                alt={job.prompt}
-                className="h-full w-full"
-                style={{ objectFit: 'cover' }}
-              />
+            className={cn(
+              'group relative overflow-hidden rounded-[1.25rem] border bg-bg-elevated transition-all',
+              isGenerating
+                ? 'border-accent/40 shadow-[0_0_0_1px_rgba(255,255,255,0.02),0_0_30px_rgba(90,184,255,0.08)]'
+                : 'border-border-subtle hover:border-border'
             )}
-
-            {job.type === 'video' && (
-              <div
-                className="opacity-0 transition-opacity group-hover:opacity-100"
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  background: 'rgba(0,0,0,0.3)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                <div
-                  className="rounded-full backdrop-blur"
-                  style={{
-                    width: '3rem',
-                    height: '3rem',
-                    background: 'rgba(255,255,255,0.2)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                >
-                  <Play className="h-5 w-5 text-white" style={{ marginLeft: '2px' }} />
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        {isFailed && (
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.5rem'
-            }}
           >
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-error/10">
-              <span className="text-lg text-error">!</span>
-            </div>
-            <span className="text-xs text-error px-2">{job.error || 'Generation failed'}</span>
-          </div>
-        )}
-
-        <div style={{ position: 'absolute', top: '0.5rem', left: '0.5rem' }}>
-          <div
-            className="backdrop-blur text-white/80"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.25rem',
-              padding: '0.125rem 0.5rem',
-              borderRadius: '0.375rem',
-              background: 'rgba(0,0,0,0.4)',
-              fontSize: '10px'
-            }}
-          >
-            {typeIcon}
-            {job.type}
-          </div>
-        </div>
-
-        {job.type === 'video' && (
-          <div
-            className="backdrop-blur text-white/80"
-            style={{
-              position: 'absolute',
-              bottom: '0.5rem',
-              right: '0.5rem',
-              padding: '0.125rem 0.375rem',
-              borderRadius: '0.25rem',
-              background: 'rgba(0,0,0,0.5)',
-              fontSize: '10px'
-            }}
-          >
-            {typeof job.config.capabilityValues.duration === 'number'
-              ? job.config.capabilityValues.duration
-              : 8}
-            s
-          </div>
-        )}
-      </div>
-
-      <div style={{ padding: '0.75rem' }}>
-        <p
-          className="text-xs text-text-secondary"
-          style={{
-            display: '-webkit-box',
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical',
-            overflow: 'hidden',
-            lineHeight: 1.6
-          }}
-        >
-          {job.prompt}
-        </p>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginTop: '0.5rem'
-          }}
-        >
-          <span className="text-text-muted" style={{ fontSize: '10px' }}>
-            {formatJobConfig(job)}
-          </span>
-          <div
-            className="opacity-0 transition-opacity group-hover:opacity-100"
-            style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}
-          >
-            {isCompleted && (
-              <>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    void handleDownload()
-                  }}
-                  className="text-text-muted transition-all hover:bg-bg-hover hover:text-text-secondary"
-                  style={{
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '4px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                >
-                  <Download className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  onClick={(e) => e.stopPropagation()}
-                  className="text-text-muted transition-all hover:bg-bg-hover hover:text-text-secondary"
-                  style={{
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '4px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                </button>
-              </>
-            )}
             <button
-              onClick={(e) => {
-                e.stopPropagation()
-                removeJob(job.id)
+              type="button"
+              onClick={() => {
+                if (job.type === 'video' && isCompleted) setVideoOpen(true)
+                if (job.type === 'image' && isCompleted) setImageOpen(true)
               }}
-              className="text-text-muted transition-all hover:bg-error/5 hover:text-error"
-              style={{
-                width: '24px',
-                height: '24px',
-                borderRadius: '4px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
+              className="block w-full text-left"
             >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          </div>
-          </div>
-        </div>
-            </div>
-          </Tilt>
-        </MorphingDialogTrigger>
+              <div className={cn('relative overflow-hidden', job.type === 'audio' ? 'h-44' : 'aspect-video')}>
+                {isGenerating ? (
+                  <div className="absolute inset-0 flex flex-col justify-between bg-[radial-gradient(circle_at_top,rgba(90,184,255,0.18),transparent_45%),linear-gradient(180deg,rgba(9,13,20,0.92),rgba(9,13,20,0.98))] p-5">
+                    <div className="flex items-center justify-between">
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-3 text-accent">
+                        {typeIcon}
+                      </div>
+                      <div className="text-right">
+                        <div className="text-2xl font-semibold text-text-primary">{Math.round(job.progress)}%</div>
+                        <div className="text-[10px] uppercase tracking-[0.18em] text-text-muted">
+                          {job.status === 'queued' ? 'Queued' : 'Rendering'}
+                        </div>
+                      </div>
+                    </div>
 
-        {isCompleted && job.result && job.type !== 'audio' && (
-          <MorphingDialogContainer>
-            <MorphingDialogContent className="pointer-events-auto relative flex h-auto w-full flex-col overflow-hidden rounded-[24px] border border-border-subtle bg-bg-primary shadow-2xl sm:w-[800px]">
-              {job.type === 'video' ? (
-                <video
-                  src={job.result.uri || `data:${job.result.mimeType};base64,${job.result.data}`}
-                  className="w-full max-h-[75vh] object-contain bg-black/50"
-                  controls
-                  autoPlay
-                />
-              ) : (
-                <img
-                  src={`data:${job.result.mimeType};base64,${job.result.data}`}
-                  alt={job.prompt}
-                  className="w-full max-h-[75vh] object-contain bg-black/50"
-                />
-              )}
-              <div className="p-5 bg-bg-primary">
-                <p className="text-sm text-text-secondary">{job.prompt}</p>
-                <div className="mt-3 flex items-center gap-2 text-[11px] text-text-muted">
-                  <span className="capitalize">{job.provider}</span> • <span className="capitalize">{job.type}</span>
+                    <div>
+                      <div className="mb-2 flex items-center gap-2 text-sm text-text-primary">
+                        <Loader2 className="h-4 w-4 animate-spin text-accent" />
+                        Generating with {job.model}...
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-white/8">
+                        <motion.div
+                          className="h-full rounded-full bg-accent"
+                          initial={{ width: '4%' }}
+                          animate={{ width: `${Math.max(4, job.progress)}%` }}
+                        />
+                      </div>
+                      <div className="mt-3 flex items-center justify-between text-xs text-text-muted">
+                        <span>Elapsed: {formatElapsed(job.startedAt, now)}</span>
+                        <span>{estimateRemaining(job, now)}</span>
+                      </div>
+                      <p className="mt-4 line-clamp-2 text-xs leading-5 text-text-secondary">{job.prompt}</p>
+                    </div>
+
+                    <div className="flex items-center justify-between border-t border-white/5 pt-4">
+                      <span className="text-[11px] text-text-muted">{formatJobConfig(job)}</span>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          void cancelJob(job.id)
+                        }}
+                        className="rounded-full border border-white/10 px-3 py-1 text-[11px] text-text-secondary transition-colors hover:border-white/20 hover:text-text-primary"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {isCompleted && job.result ? (
+                  <>
+                    {job.type === 'video' ? (
+                      <VideoPlayer
+                        src={getJobSrc(job)}
+                        mimeType={job.result.mimeType}
+                        compact
+                        className="h-full w-full"
+                      />
+                    ) : job.type === 'audio' ? (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.16),transparent_42%),linear-gradient(180deg,rgba(9,13,20,0.82),rgba(9,13,20,0.94))]">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10">
+                          <Music className="h-6 w-6 text-emerald-400" />
+                        </div>
+                        <audio
+                          controls
+                          src={`data:${job.result.mimeType};base64,${job.result.data}`}
+                          style={{ width: '82%', height: '34px' }}
+                        />
+                      </div>
+                    ) : (
+                      <img
+                        src={`data:${job.result.mimeType};base64,${job.result.data}`}
+                        alt={job.prompt}
+                        className="h-full w-full object-cover"
+                      />
+                    )}
+                  </>
+                ) : null}
+
+                {isFailed ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[linear-gradient(180deg,rgba(40,8,12,0.88),rgba(16,10,12,0.96))] px-4 text-center">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-error/10 text-error">
+                      !
+                    </div>
+                    <span className="text-xs text-error">{job.error || 'Generation failed'}</span>
+                  </div>
+                ) : null}
+
+                <div className="absolute left-3 top-3 rounded-full bg-black/45 px-2.5 py-1 text-[10px] text-white/85 backdrop-blur-md">
+                  <span className="inline-flex items-center gap-1.5">
+                    {typeIcon}
+                    {job.type}
+                  </span>
+                </div>
+
+                {job.type === 'video' && !isGenerating ? (
+                  <div className="absolute bottom-3 right-3 rounded-full bg-black/50 px-2.5 py-1 text-[10px] text-white/80 backdrop-blur-md">
+                    {typeof job.config.capabilityValues.duration === 'number'
+                      ? job.config.capabilityValues.duration
+                      : 8}
+                    s
+                  </div>
+                ) : null}
+              </div>
+            </button>
+
+            <div className="space-y-3 p-4">
+              <p className="line-clamp-2 text-sm leading-6 text-text-secondary">{job.prompt}</p>
+
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[11px] text-text-muted">{formatJobConfig(job)}</span>
+                <div className="flex items-center gap-1">
+                  {isCompleted ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => void handleDownload()}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-bg-hover hover:text-text-secondary"
+                      >
+                        <Download className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void navigator.clipboard.writeText(job.prompt)}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-bg-hover hover:text-text-secondary"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleRerun}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border-subtle px-2.5 text-[11px] text-text-secondary transition-colors hover:bg-bg-hover"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        Re-run
+                      </button>
+                    </>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => removeJob(job.id)}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-error/5 hover:text-error"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                 </div>
               </div>
-              <MorphingDialogClose className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition-colors hover:bg-black/60 focus:outline-none">
-                <X className="h-4 w-4" />
-              </MorphingDialogClose>
-            </MorphingDialogContent>
-          </MorphingDialogContainer>
-        )}
-      </MorphingDialog>
-    </motion.div>
+            </div>
+          </div>
+        </Tilt>
+      </motion.div>
+
+      {job.type === 'video' ? (
+        <VideoLightbox job={job} isOpen={videoOpen} onClose={() => setVideoOpen(false)} />
+      ) : null}
+      {job.type === 'image' ? (
+        <ImageLightbox job={job} isOpen={imageOpen} onClose={() => setImageOpen(false)} />
+      ) : null}
+    </>
   )
 }
 
 export function MediaGrid(): JSX.Element | null {
-  const { jobs } = useGenerationStore()
+  const { jobs, activeJobId } = useGenerationStore()
+  const cardRefs = useRef<Record<string, HTMLDivElement | null>>({})
+
+  useEffect(() => {
+    if (!activeJobId) return
+    const node = cardRefs.current[activeJobId]
+    node?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [activeJobId, jobs.length])
 
   if (jobs.length === 0) return null
 
   return (
     <div
+      className="grid gap-4 p-6"
       style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-        gap: '1rem',
-        padding: '1.5rem'
+        gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))'
       }}
     >
       {jobs.map((job) => (
-        <MediaCard key={job.id} job={job} />
+        <div key={job.id} ref={(node) => void (cardRefs.current[job.id] = node)}>
+          <MediaCard job={job} />
+        </div>
       ))}
     </div>
   )

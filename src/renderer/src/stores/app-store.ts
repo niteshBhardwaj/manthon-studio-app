@@ -7,6 +7,14 @@ import { create } from 'zustand'
 
 type SidebarTab = 'create' | 'queue' | 'history' | 'assets' | 'templates' | 'settings'
 type ModalType = 'settings' | 'api-keys' | 'prompt-builder' | null
+type ToastTone = 'info' | 'success' | 'error'
+
+export interface AppToast {
+  id: string
+  title: string
+  message?: string
+  tone: ToastTone
+}
 
 interface AppState {
   // Sidebar
@@ -14,6 +22,8 @@ interface AppState {
   activeSidebarTab: SidebarTab
   toggleSidebar: () => void
   setSidebarTab: (tab: SidebarTab) => void
+  historyHasUpdates: boolean
+  setHistoryHasUpdates: (value: boolean) => void
 
   // Modals
   activeModal: ModalType
@@ -27,6 +37,15 @@ interface AppState {
   // Search
   searchQuery: string
   setSearchQuery: (query: string) => void
+
+  // Toasts
+  toasts: AppToast[]
+  addToast: (toast: Omit<AppToast, 'id'>) => void
+  removeToast: (id: string) => void
+
+  // Preferences
+  playCompletionSound: boolean
+  setPlayCompletionSound: (value: boolean) => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -34,7 +53,13 @@ export const useAppStore = create<AppState>((set) => ({
   sidebarCollapsed: false,
   activeSidebarTab: 'create',
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
-  setSidebarTab: (tab) => set({ activeSidebarTab: tab }),
+  setSidebarTab: (tab) =>
+    set((state) => ({
+      activeSidebarTab: tab,
+      historyHasUpdates: tab === 'history' ? false : state.historyHasUpdates
+    })),
+  historyHasUpdates: false,
+  setHistoryHasUpdates: (value) => set({ historyHasUpdates: value }),
 
   // Modals
   activeModal: null,
@@ -47,5 +72,26 @@ export const useAppStore = create<AppState>((set) => ({
 
   // Search
   searchQuery: '',
-  setSearchQuery: (query) => set({ searchQuery: query })
+  setSearchQuery: (query) => set({ searchQuery: query }),
+
+  // Toasts
+  toasts: [],
+  addToast: (toast) =>
+    set((state) => ({
+      toasts: [
+        ...state.toasts,
+        {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          ...toast
+        }
+      ]
+    })),
+  removeToast: (id) =>
+    set((state) => ({
+      toasts: state.toasts.filter((toast) => toast.id !== id)
+    })),
+
+  // Preferences
+  playCompletionSound: true,
+  setPlayCompletionSound: (value) => set({ playCompletionSound: value })
 }))

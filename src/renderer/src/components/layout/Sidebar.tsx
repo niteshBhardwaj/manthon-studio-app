@@ -19,7 +19,7 @@ const navItems = [
 ]
 
 export function Sidebar(): JSX.Element {
-  const { activeSidebarTab, setSidebarTab, openModal } = useAppStore()
+  const { activeSidebarTab, setSidebarTab, openModal, historyHasUpdates } = useAppStore()
   const pendingCount = useQueueStore(
     (state) =>
       state.jobs.filter((job) => job.status === 'pending' || job.status === 'running').length
@@ -58,6 +58,12 @@ export function Sidebar(): JSX.Element {
                   title={item.label}
                 >
                   <Icon className="w-5 h-5" />
+                  {item.id === 'history' && historyHasUpdates && !isActive ? (
+                    <>
+                      <span className="absolute inset-1 rounded-full border border-emerald-400/50 animate-ping" />
+                      <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.7)]" />
+                    </>
+                  ) : null}
                   {item.id === 'queue' && pendingCount > 0 ? (
                     <span className="absolute right-1 top-1 min-w-4 rounded-full bg-accent px-1 text-[9px] font-semibold leading-4 text-white">
                       {pendingCount > 9 ? '9+' : pendingCount}

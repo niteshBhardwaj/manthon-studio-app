@@ -8,18 +8,57 @@ import { useProviderStore } from './stores/provider-store'
 import { useGenerationStore } from './stores/generation-store'
 import { useModelStore } from './stores/model-store'
 import { useQueueStore } from './stores/queue-store'
-import type { QueueJobCompletePayload } from '../../main/queue/types'
+import type {
+  QueueJobCompletePayload,
+  QueueJobFailedPayload,
+  QueueJobProgressPayload
+} from '../../main/queue/types'
+import { queueJobToGenerationJob } from './lib/enqueue-generation'
+import { useAppStore } from './stores/app-store'
+
+function playCompletionChime(): void {
+  const AudioContextCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+  if (!AudioContextCtor) return
+
+  const context = new AudioContextCtor()
+  const oscillator = context.createOscillator()
+  const gain = context.createGain()
+
+  oscillator.type = 'sine'
+  oscillator.frequency.setValueAtTime(659.25, context.currentTime)
+  oscillator.frequency.linearRampToValueAtTime(880, context.currentTime + 0.22)
+  gain.gain.setValueAtTime(0.001, context.currentTime)
+  gain.gain.exponentialRampToValueAtTime(0.08, context.currentTime + 0.02)
+  gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.36)
+
+  oscillator.connect(gain)
+  gain.connect(context.destination)
+  oscillator.start()
+  oscillator.stop(context.currentTime + 0.38)
+  void context.close().catch(() => undefined)
+}
 
 function App(): JSX.Element {
   const { fetchProviders } = useProviderStore()
   const { addJob, updateJob } = useGenerationStore()
   const { loadEnabledModels } = useModelStore()
   const { initialize: initializeQueue } = useQueueStore()
+  const { addToast, setHistoryHasUpdates, setPlayCompletionSound } = useAppStore()
 
   useEffect(() => {
     void Promise.all([fetchProviders(), loadEnabledModels(), initializeQueue()])
+    void window.manthan?.getPreferences().then((preferences) => {
+      setPlayCompletionSound(Boolean(preferences.playCompletionSound ?? true))
+    })
 
     if (typeof window !== 'undefined' && window.manthan) {
+      const unsubProgress = window.manthan.onQueueJobProgress((payload: QueueJobProgressPayload) => {
+        updateJob(payload.jobId, {
+          status: payload.status === 'running' ? 'generating' : 'queued',
+          progress: payload.progress
+        })
+      })
+
       const unsubComplete = window.manthan.onQueueJobComplete(
         async (payload: QueueJobCompletePayload) => {
           const base64Data =
@@ -30,24 +69,9 @@ function App(): JSX.Element {
             ''
 
           const generationJob = {
-            id: payload.jobId,
-            type: payload.job.type,
+            ...queueJobToGenerationJob(payload.job),
             status: 'completed' as const,
-            prompt: payload.job.prompt,
-            negativePrompt: payload.job.negative_prompt || undefined,
-            provider: payload.job.provider,
-            model: payload.job.model,
-            config: {
-              contentType: payload.job.config.contentType,
-              activeMode: payload.job.config.activeMode,
-              batchCount: payload.job.config.batchCount,
-              capabilityValues: payload.job.config.capabilityValues as Record<
-                string,
-                string | number | boolean
-              >
-            },
             progress: 100,
-            startedAt: payload.job.started_at ?? payload.job.created_at,
             completedAt: payload.job.completed_at ?? Date.now(),
             result: {
               type: payload.job.type,
@@ -65,16 +89,51 @@ function App(): JSX.Element {
           } else {
             addJob(generationJob)
           }
+
+          addToast({
+            title: 'Generation complete',
+            message: payload.job.prompt,
+            tone: 'success'
+          })
+          setHistoryHasUpdates(true)
+
+          if (document.hidden && useAppStore.getState().playCompletionSound) {
+            playCompletionChime()
+          }
         }
       )
 
+      const unsubFailed = window.manthan.onQueueJobFailed((payload: QueueJobFailedPayload) => {
+        updateJob(payload.jobId, {
+          ...queueJobToGenerationJob(payload.job),
+          status: 'failed',
+          error: payload.error
+        })
+        addToast({
+          title: 'Generation failed',
+          message: payload.error,
+          tone: 'error'
+        })
+      })
+
       return () => {
+        unsubProgress()
         unsubComplete()
+        unsubFailed()
       }
     }
 
     return undefined
-  }, [addJob, fetchProviders, initializeQueue, loadEnabledModels, updateJob])
+  }, [
+    addJob,
+    addToast,
+    fetchProviders,
+    initializeQueue,
+    loadEnabledModels,
+    setHistoryHasUpdates,
+    setPlayCompletionSound,
+    updateJob
+  ])
 
   return <AppShell />
 }

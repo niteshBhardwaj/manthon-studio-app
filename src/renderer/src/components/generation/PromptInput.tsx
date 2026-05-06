@@ -10,8 +10,8 @@ import { useGenerationStore, type BinaryInput } from '../../stores/generation-st
 import { useModelStore } from '../../stores/model-store'
 import { useProviderStore } from '../../stores/provider-store'
 import { useProjectStore } from '../../stores/project-store'
-import { buildPayload } from '../../lib/build-payload'
 import useClickOutside from '../../hooks/useClickOutside'
+import { enqueueGeneration } from '../../lib/enqueue-generation'
 import {
   getAvailableContentTypes,
   getModelById,
@@ -42,6 +42,7 @@ export function PromptInput(): JSX.Element {
     activeMode,
     batchCount,
     selectedModel,
+    extendingJobId,
     startFrame,
     endFrame,
     referenceImages,
@@ -54,7 +55,9 @@ export function PromptInput(): JSX.Element {
     setEndFrame,
     addReferenceImage,
     removeReferenceImage,
-    clearReferenceImages
+    clearReferenceImages,
+    resetPromptAfterSubmit,
+    addJob
   } = useGenerationStore()
   const { enabledModelIds } = useModelStore()
   const { setActiveProvider } = useProviderStore()
@@ -75,6 +78,7 @@ export function PromptInput(): JSX.Element {
     [contentType, enabledModelIds]
   )
   const selectedModelDescriptor = useMemo(() => getModelById(selectedModel), [selectedModel])
+  const isExtendMode = Boolean(extendingJobId)
   const isFramesMode = contentType === 'video' && activeMode === 'frames'
   const isIngredientsMode = activeMode === 'ingredients'
   const activeModeDescriptor =
@@ -162,79 +166,24 @@ export function PromptInput(): JSX.Element {
   const handleGenerate = useCallback(async () => {
     if (!prompt.trim() || !selectedModelDescriptor || isGenerating) return
 
-    const totalRequests =
-      selectedModelDescriptor.contentType === 'audio' ? 1 : Math.max(1, batchCount)
-
     setIsGenerating(true)
 
     try {
-      for (let index = 0; index < totalRequests; index += 1) {
-        const payload = buildPayload({
-          prompt,
-          negativePrompt,
-          selectedModel: selectedModelDescriptor,
-          capabilityValues,
-          startFrame,
-          endFrame,
-          referenceImages,
-          batchCount: 1,
-          activeMode
-        })
+      const createdJobs = await enqueueGeneration({
+        prompt,
+        negativePrompt,
+        selectedModel,
+        capabilityValues: capabilityValues as Record<string, string | number | boolean>,
+        startFrame,
+        endFrame,
+        referenceImages,
+        batchCount: selectedModelDescriptor.contentType === 'audio' ? 1 : Math.max(1, batchCount),
+        activeMode,
+        activeProjectId
+      })
 
-        if (!window.manthan) {
-          continue
-        }
-
-        try {
-          await window.manthan.setActiveProvider(payload.providerId)
-
-          const queueInput = {
-            projectId: activeProjectId,
-            type: payload.contentType,
-            prompt: payload.params.prompt,
-            negativePrompt:
-              'negativePrompt' in payload.params ? payload.params.negativePrompt : undefined,
-            provider: payload.providerId,
-            model: selectedModelDescriptor.id,
-            config: {
-              contentType: payload.contentType,
-              activeMode,
-              batchCount: 1,
-              capabilityValues: { ...capabilityValues, batch_count: 1 },
-              providerParams: payload.params
-            },
-            inputAssets: [
-              ...(startFrame ? [{ ...startFrame, referenceType: 'start-frame' as const }] : []),
-              ...(endFrame ? [{ ...endFrame, referenceType: 'end-frame' as const }] : []),
-              ...referenceImages.map((image) => ({
-                ...image,
-                referenceType: 'reference' as const
-              }))
-            ]
-          }
-
-          if (payload.contentType === 'image') {
-            await window.manthan.generateImage(queueInput)
-            continue
-          }
-
-          if (payload.contentType === 'audio') {
-            await window.manthan.generateAudio(queueInput)
-            continue
-          }
-
-          await window.manthan.generateVideo(queueInput)
-        } catch (jobError) {
-          console.error('Job enqueue failed:', jobError)
-
-          let errorMessage = jobError instanceof Error ? jobError.message : String(jobError)
-          if (errorMessage.includes('Provider not initialized')) {
-            errorMessage = 'Provider not initialized. Please add your API key in the settings.'
-          }
-
-          throw new Error(errorMessage)
-        }
-      }
+      createdJobs.forEach((job) => addJob(job))
+      resetPromptAfterSubmit()
     } catch (error) {
       console.error('Generation failed:', error)
     } finally {
@@ -242,6 +191,8 @@ export function PromptInput(): JSX.Element {
     }
   }, [
     activeMode,
+    activeProjectId,
+    addJob,
     batchCount,
     capabilityValues,
     endFrame,
@@ -249,14 +200,16 @@ export function PromptInput(): JSX.Element {
     negativePrompt,
     prompt,
     referenceImages,
+    resetPromptAfterSubmit,
+    selectedModel,
     selectedModelDescriptor,
-    startFrame,
-    activeProjectId
+    startFrame
   ])
 
   // ── Computed values ────────────────────────────────────
 
   const promptPlaceholder = useMemo(() => {
+    if (isExtendMode) return 'Describe how to continue this video...'
     if (contentType === 'audio') return 'Describe the sound, score, or mood you want to create...'
     if (contentType === 'video' && activeMode === 'ingredients') {
       return 'Describe the scene and combine it with uploaded ingredients...'
@@ -268,7 +221,7 @@ export function PromptInput(): JSX.Element {
       return 'Describe how to transform the uploaded images...'
     }
     return 'Describe what you want to create...'
-  }, [activeMode, contentType, referenceImages.length])
+  }, [activeMode, contentType, isExtendMode, referenceImages.length])
 
   const estimatedCredits = useMemo(() => {
     const base =
@@ -277,9 +230,10 @@ export function PromptInput(): JSX.Element {
   }, [batchCount, contentType])
 
   const showPrimaryAttachmentButton =
+    !isExtendMode &&
     (contentType !== 'audio' || isIngredientsMode) && !isFramesMode
   const hasAttachmentContent =
-    Boolean(startFrame) || Boolean(endFrame) || referenceImages.length > 0 || isFramesMode
+    !isExtendMode && (Boolean(startFrame) || Boolean(endFrame) || referenceImages.length > 0 || isFramesMode)
 
   useClickOutside(configRef, (event) => {
     const target = event.target as Element
@@ -381,19 +335,23 @@ export function PromptInput(): JSX.Element {
                     >
                       <div className="bg-bg-secondary border border-border shadow-2xl overflow-hidden rounded-[1.5rem] p-2.5">
                         <div className="flex h-88 flex-col gap-1.5 overflow-y-auto pr-1">
-                          <ContentTypeTabs
-                            activeType={contentType}
-                            availableTypes={availableTypes}
-                            onChange={(type) => setContentType(type, enabledModelIds)}
-                          />
+                          {!isExtendMode ? (
+                            <ContentTypeTabs
+                              activeType={contentType}
+                              availableTypes={availableTypes}
+                              onChange={(type) => setContentType(type, enabledModelIds)}
+                            />
+                          ) : null}
 
-                          <ModelSelector
-                            models={modelsForType}
-                            value={selectedModelDescriptor?.id ?? ''}
-                            onChange={setSelectedModel}
-                          />
+                          {!isExtendMode ? (
+                            <ModelSelector
+                              models={modelsForType}
+                              value={selectedModelDescriptor?.id ?? ''}
+                              onChange={setSelectedModel}
+                            />
+                          ) : null}
 
-                          {selectedModelDescriptor?.modes?.length ? (
+                          {!isExtendMode && selectedModelDescriptor?.modes?.length ? (
                             <ModeTabs
                               modes={selectedModelDescriptor.modes}
                               activeMode={activeMode}
@@ -403,22 +361,24 @@ export function PromptInput(): JSX.Element {
                             />
                           ) : null}
 
-                          <CapabilityRenderer
-                            capabilities={visibleCapabilities}
-                            values={capabilityValues}
-                            batchCount={batchCount}
-                            onSetValue={setCapabilityValue}
-                            onSetBatchCount={setBatchCount}
-                          />
+                          {!isExtendMode ? (
+                            <CapabilityRenderer
+                              capabilities={visibleCapabilities}
+                              values={capabilityValues}
+                              batchCount={batchCount}
+                              onSetValue={setCapabilityValue}
+                              onSetBatchCount={setBatchCount}
+                            />
+                          ) : null}
 
-                          {selectedModelDescriptor?.id === 'lyria-3-clip-preview' ? (
+                          {!isExtendMode && selectedModelDescriptor?.id === 'lyria-3-clip-preview' ? (
                             <div className="rounded-lg bg-black/20 p-2.5 text-[10px] text-text-muted leading-relaxed border border-white/5">
                               <div className="flex items-center justify-between">
                                 <span className="font-semibold text-text-secondary">Duration</span>
                                 <span>30s Fixed</span>
                               </div>
                             </div>
-                          ) : selectedModelDescriptor?.id === 'lyria-3-pro-preview' ? (
+                          ) : !isExtendMode && selectedModelDescriptor?.id === 'lyria-3-pro-preview' ? (
                             <div className="rounded-lg bg-black/20 p-2.5 text-[10px] text-text-muted leading-relaxed border border-white/5 mt-1">
                               <div className="flex items-center justify-between">
                                 <span className="font-semibold text-text-secondary">
@@ -432,24 +392,28 @@ export function PromptInput(): JSX.Element {
                             </div>
                           ) : null}
 
-                          <div className="pt-2 text-center text-[11px] font-medium text-text-muted">
-                            Generating will use{' '}
-                            <span className="font-semibold text-text-secondary underline decoration-text-muted/60 underline-offset-2">
-                              {estimatedCredits} credits
-                            </span>
-                          </div>
+                          {!isExtendMode ? (
+                            <div className="pt-2 text-center text-[11px] font-medium text-text-muted">
+                              Generating will use{' '}
+                              <span className="font-semibold text-text-secondary underline decoration-text-muted/60 underline-offset-2">
+                                {estimatedCredits} credits
+                              </span>
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     </motion.div>
                   ) : null}
                 </AnimatePresence>
 
-                <BottomActionBar
-                  batchCount={batchCount}
-                  contentType={contentType}
-                  isOpen={isConfigOpen}
-                  onClick={() => setIsConfigOpen((open) => !open)}
-                />
+                {!isExtendMode ? (
+                  <BottomActionBar
+                    batchCount={batchCount}
+                    contentType={contentType}
+                    isOpen={isConfigOpen}
+                    onClick={() => setIsConfigOpen((open) => !open)}
+                  />
+                ) : null}
               </div>
               <button
                 onClick={() => void handleGenerate()}
@@ -471,16 +435,18 @@ export function PromptInput(): JSX.Element {
               </button>
             </div>
           </motion.div>
-          <SelectedOptionsDisplay
-            models={modelsForType}
-            activeModeDescriptor={activeModeDescriptor}
-            selectedModelDescriptor={selectedModelDescriptor}
-            capabilities={visibleCapabilities}
-            values={capabilityValues}
-            onSetModel={setSelectedModel}
-            onSetMode={setActiveMode}
-            onSetValue={setCapabilityValue}
-          />
+          {!isExtendMode ? (
+            <SelectedOptionsDisplay
+              models={modelsForType}
+              activeModeDescriptor={activeModeDescriptor}
+              selectedModelDescriptor={selectedModelDescriptor}
+              capabilities={visibleCapabilities}
+              values={capabilityValues}
+              onSetModel={setSelectedModel}
+              onSetMode={setActiveMode}
+              onSetValue={setCapabilityValue}
+            />
+          ) : null}
         </div>
         <AssetPickerModal
           isOpen={isAssetPickerOpen}

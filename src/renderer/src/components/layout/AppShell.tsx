@@ -11,6 +11,7 @@ import { Sidebar } from './Sidebar'
 import { MainCanvas } from './MainCanvas'
 import { ApiKeyManager } from '../settings/ApiKeyManager'
 import { useAppStore } from '../../stores/app-store'
+import { Toaster } from '../ui/Toaster'
 
 export function AppShell(): JSX.Element {
   const { activeModal, openModal, closeModal, setSidebarTab } = useAppStore()
@@ -79,6 +80,7 @@ export function AppShell(): JSX.Element {
         {activeModal === 'api-keys' && <ApiKeyManager />}
         {activeModal === 'settings' && <ApiKeyManager />}
       </AnimatePresence>
+      <Toaster />
     </div>
   )
 }

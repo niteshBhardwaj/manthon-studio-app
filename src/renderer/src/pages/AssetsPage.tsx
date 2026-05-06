@@ -27,6 +27,7 @@ import {
 import { useState, useEffect, useCallback } from 'react'
 import { cn } from '../lib/utils'
 import { useProjectStore } from '../stores/project-store'
+import { VideoPlayer } from '../components/player/VideoPlayer'
 import {
   MorphingDialog,
   MorphingDialogTrigger,
@@ -54,9 +55,66 @@ interface Asset {
 
 type FilterType = 'all' | 'video' | 'image' | 'audio'
 
+function getAssetSrc(asset: Asset): string {
+  return `asset:///${asset.storage_path.replace(/\\/g, '/')}`
+}
+
+function getAssetPoster(asset: Asset): string | undefined {
+  if (!asset.thumbnail_path) return undefined
+  return `asset:///${asset.thumbnail_path.replace(/\\/g, '/')}`
+}
+
+function AssetVideoSurface({
+  asset,
+  compact = false,
+  className,
+  autoPlay = false
+}: {
+  asset: Asset
+  compact?: boolean
+  className?: string
+  autoPlay?: boolean
+}) {
+  const [resolvedSrc, setResolvedSrc] = useState<string>(getAssetSrc(asset))
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadVideoData = async () => {
+      if (!window.manthan) return
+
+      try {
+        const base64 = await window.manthan.readAsset(asset.id)
+        if (!cancelled && base64) {
+          setResolvedSrc(`data:${asset.mime_type};base64,${base64}`)
+        }
+      } catch (error) {
+        console.error('[AssetsPage] Failed to read video asset:', error)
+      }
+    }
+
+    void loadVideoData()
+
+    return () => {
+      cancelled = true
+    }
+  }, [asset.id, asset.mime_type, asset.storage_path])
+
+  return (
+    <VideoPlayer
+      src={resolvedSrc}
+      mimeType={asset.mime_type}
+      poster={getAssetPoster(asset)}
+      compact={compact}
+      autoPlay={autoPlay}
+      className={className}
+    />
+  )
+}
+
 const MorphingMedia = ({ asset, className }: { asset: Asset; className?: string }) => {
   const { uniqueId } = useMorphingDialog()
-  const src = `asset:///${asset.storage_path.replace(/\\/g, '/')}`
+  const src = getAssetSrc(asset)
 
   if (asset.type === 'image') {
     return (
@@ -73,12 +131,9 @@ const MorphingMedia = ({ asset, className }: { asset: Asset; className?: string 
   }
   if (asset.type === 'video') {
     return (
-      <motion.video
-        src={src}
-        layoutId={`dialog-media-${uniqueId}`}
-        className={className}
-        muted
-      />
+      <motion.div layoutId={`dialog-media-${uniqueId}`} className={cn('h-full w-full', className)}>
+        <AssetVideoSurface asset={asset} compact className="h-full w-full" />
+      </motion.div>
     )
   }
   return (
@@ -103,7 +158,7 @@ const AssetDetailModalContent = ({
   const [showInfo, setShowInfo] = useState(false)
   const [zoomScale, setZoomScale] = useState(1)
   const { setIsOpen, uniqueId } = useMorphingDialog()
-  const src = `asset:///${asset.storage_path.replace(/\\/g, '/')}`
+  const src = getAssetSrc(asset)
 
   return (
     <MorphingDialogContent className="fixed inset-0 z-[100] flex flex-col bg-black/95 text-white">
@@ -164,13 +219,12 @@ const AssetDetailModalContent = ({
             </motion.div>
           )}
           {asset.type === 'video' && (
-            <motion.video
-              src={src}
+            <motion.div
               layoutId={`dialog-media-${uniqueId}`}
-              controls
-              autoPlay
-              className="max-w-full max-h-full"
-            />
+              className="flex h-full w-full items-center justify-center"
+            >
+              <AssetVideoSurface asset={asset} autoPlay className="aspect-video w-full max-w-5xl" />
+            </motion.div>
           )}
           {asset.type === 'audio' && (
             <motion.div
@@ -581,6 +635,16 @@ export function AssetsPage() {
                 <span className="text-[9px] px-1.5 py-0.5 rounded bg-bg-elevated text-text-muted">
                   {asset.source}
                 </span>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    setPreviewAssetId(asset.id)
+                  }}
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-all hover:bg-bg-hover hover:text-text-secondary"
+                >
+                  <ZoomIn className="w-3.5 h-3.5" />
+                </button>
               </motion.div>
             )
           })}
