@@ -135,7 +135,7 @@ export function SelectedOptionsDisplay({
           key={i}
           type="button"
           onClick={item.onClick}
-          className="rounded-full bg-white/5 border border-white/10 px-3 py-1 text-[11px] font-medium text-text-secondary backdrop-blur-sm transition-colors hover:bg-white/10 hover:text-text-primary"
+          className="rounded-full bg-bg-elevated border border-border px-3 py-1 text-[11px] font-medium text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
         >
           {item.label}
         </button>

@@ -13,10 +13,7 @@ export function ContentTypeTabs({
   onChange: (type: ContentType) => void
 }): JSX.Element {
   return (
-    <div
-      className="grid gap-2"
-      style={{ gridTemplateColumns: `repeat(${availableTypes.length || 1}, minmax(0, 1fr))` }}
-    >
+    <div className="flex w-full shrink-0 min-h-11 gap-2 overflow-x-auto">
       {availableTypes.map((type) => {
         const Icon = contentTypeMeta[type].icon
         const active = type === activeType
@@ -27,7 +24,7 @@ export function ContentTypeTabs({
             type="button"
             onClick={() => onChange(type)}
             className={cn(
-              'flex h-[2.75rem] items-center justify-center gap-2 rounded-[1rem] border text-[0.85rem] font-medium transition-all',
+              'flex h-11 flex-1 min-w-24 items-center justify-center gap-2 rounded-xl border text-[0.85rem] font-medium transition-all',
               active
                 ? 'border-transparent bg-white text-black'
                 : 'border-transparent bg-white/5 text-text-secondary hover:bg-white/10 hover:text-text-primary'

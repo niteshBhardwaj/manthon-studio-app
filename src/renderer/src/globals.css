@@ -233,4 +233,13 @@
     box-shadow: 0 0 6px var(--color-warning);
     animation: pulse-glow 1.5s ease-in-out infinite;
   }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
 }

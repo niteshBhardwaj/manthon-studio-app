@@ -127,9 +127,9 @@ export function PromptInput(): JSX.Element {
       try {
         const base64Data = await window.manthan.readAsset(asset.id)
         if (!base64Data) continue
-        
+
         const input: BinaryInput = { data: base64Data, mimeType: asset.mime_type }
-        
+
         if (assetPickerTarget === 'start') {
           setStartFrame(input)
         } else if (assetPickerTarget === 'end') {
@@ -281,7 +281,12 @@ export function PromptInput(): JSX.Element {
   const hasAttachmentContent =
     Boolean(startFrame) || Boolean(endFrame) || referenceImages.length > 0 || isFramesMode
 
-  useClickOutside(configRef, () => {
+  useClickOutside(configRef, (event) => {
+    const target = event.target as Element
+    // Don't close if clicking inside a radix portal (like the Select dropdown)
+    if (target.closest('[data-radix-popper-content-wrapper]') || target.closest('[data-radix-portal]')) {
+      return
+    }
     setIsConfigOpen(false)
   })
 
@@ -291,191 +296,191 @@ export function PromptInput(): JSX.Element {
     <MorphingDialog isOpen={isAssetPickerOpen} setIsOpen={setIsAssetPickerOpen}>
       <motion.div className="absolute bottom-6 left-1/2 z-40 w-full max-w-3xl -translate-x-1/2 px-4">
         <div className="relative">
-        <motion.div
-          className={cn(
-            'glass-strong relative overflow-visible rounded-[1.5rem] p-3 transition-shadow lg:p-4',
-            isFocused ? 'shadow-glow shadow-float' : 'shadow-lg'
-          )}
-        >
-          <div className="flex flex-col gap-2.5">
-            {hasAttachmentContent ? (
-              <div className="flex items-start">
-                <PromptAttachmentArea
-                  contentType={contentType}
-                  activeMode={activeMode}
-                  startFrame={startFrame}
-                  endFrame={endFrame}
-                  referenceImages={referenceImages}
-                  maxImages={selectedModelDescriptor?.maxImages}
-                  onStartUpload={() => handleFileUpload('start')}
-                  onEndUpload={() => handleFileUpload('end')}
-                  onReferenceUpload={() => handleFileUpload('reference')}
-                  onStartClear={() => setStartFrame(null)}
-                  onEndClear={() => setEndFrame(null)}
-                  onReferenceClear={removeReferenceImage}
-                  onClearReferences={clearReferenceImages}
-                />
-              </div>
-            ) : null}
-
-            <div className="relative flex w-full items-start">
-              <OptimizedTextArea
-                initialPrompt={prompt}
-                onPromptChange={setPrompt}
-                isExpanded={isExpanded}
-                setIsExpanded={setIsExpanded}
-                placeholder={promptPlaceholder}
-                hasAttachmentButton={showPrimaryAttachmentButton}
-                onFocus={() => setIsFocused(true)}
-                onBlur={() => setIsFocused(false)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault()
-                    void handleGenerate()
-                  }
-                }}
-              />
-
-              {showPrimaryAttachmentButton ? (
-                <div
-                  className={cn(
-                    'absolute z-10 transition-all duration-300',
-                    isExpanded ? 'bottom-1 left-1' : 'left-0 top-0'
-                  )}
-                >
-                  <MorphingDialogTrigger onClick={handlePrimaryAttachment}>
-                    <div
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-transparent text-text-secondary transition-colors hover:text-text-primary"
-                    >
-                      <Plus className="h-5 w-5" />
-                    </div>
-                  </MorphingDialogTrigger>
-                </div>
-              ) : null}
-            </div>
-          </div>
-
-          {/* ── Bottom bar: config popover + generate button ── */}
-          <div
+          <motion.div
             className={cn(
-              'flex items-center justify-end gap-2.5 transition-all duration-300',
-              isExpanded
-                ? 'absolute bottom-3 right-3 lg:bottom-4 lg:right-4'
-                : 'mt-4 lg:absolute lg:bottom-4 lg:right-4 lg:mt-0'
+              'bg-bg-secondary border border-border shadow-2xl relative overflow-visible rounded-[1.5rem] p-3 transition-shadow lg:p-4',
+              isFocused ? 'shadow-glow shadow-float' : 'shadow-lg'
             )}
           >
-            <div ref={configRef} className="relative">
-              <AnimatePresence initial={false}>
-                {isConfigOpen ? (
-                  <motion.div
-                    initial={{ opacity: 0, y: 12, scale: 0.98 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 12, scale: 0.98 }}
-                    transition={{ type: 'spring', bounce: 0.1, duration: 0.25 }}
-                    className="absolute bottom-full right-0 z-30 mb-2.5 w-[min(26rem,calc(100vw-2rem))] max-w-[26rem]"
+            <div className="flex flex-col gap-2.5">
+              {hasAttachmentContent ? (
+                <div className="flex items-start">
+                  <PromptAttachmentArea
+                    contentType={contentType}
+                    activeMode={activeMode}
+                    startFrame={startFrame}
+                    endFrame={endFrame}
+                    referenceImages={referenceImages}
+                    maxImages={selectedModelDescriptor?.maxImages}
+                    onStartUpload={() => handleFileUpload('start')}
+                    onEndUpload={() => handleFileUpload('end')}
+                    onReferenceUpload={() => handleFileUpload('reference')}
+                    onStartClear={() => setStartFrame(null)}
+                    onEndClear={() => setEndFrame(null)}
+                    onReferenceClear={removeReferenceImage}
+                    onClearReferences={clearReferenceImages}
+                  />
+                </div>
+              ) : null}
+
+              <div className="relative flex w-full items-start">
+                <OptimizedTextArea
+                  initialPrompt={prompt}
+                  onPromptChange={setPrompt}
+                  isExpanded={isExpanded}
+                  setIsExpanded={setIsExpanded}
+                  placeholder={promptPlaceholder}
+                  hasAttachmentButton={showPrimaryAttachmentButton}
+                  onFocus={() => setIsFocused(true)}
+                  onBlur={() => setIsFocused(false)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                      event.preventDefault()
+                      void handleGenerate()
+                    }
+                  }}
+                />
+
+                {showPrimaryAttachmentButton ? (
+                  <div
+                    className={cn(
+                      'absolute z-10 transition-all duration-300',
+                      isExpanded ? 'bottom-1 left-1' : 'left-0 top-0'
+                    )}
                   >
-                    <div className="glass-strong overflow-hidden rounded-[1.5rem] p-2.5">
-                      <div className="flex h-[22rem] flex-col gap-1.5 overflow-y-auto pr-1 scrollbar-hide">
-                        <ContentTypeTabs
-                          activeType={contentType}
-                          availableTypes={availableTypes}
-                          onChange={(type) => setContentType(type, enabledModelIds)}
-                        />
+                    <MorphingDialogTrigger onClick={handlePrimaryAttachment}>
+                      <div
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-transparent text-text-secondary transition-colors hover:text-text-primary"
+                      >
+                        <Plus className="h-5 w-5" />
+                      </div>
+                    </MorphingDialogTrigger>
+                  </div>
+                ) : null}
+              </div>
+            </div>
 
-                        {selectedModelDescriptor?.modes?.length ? (
-                          <ModeTabs
-                            modes={selectedModelDescriptor.modes}
-                            activeMode={activeMode}
-                            onChange={(modeId) => {
-                              setActiveMode(modeId)
-                            }}
+            {/* ── Bottom bar: config popover + generate button ── */}
+            <div
+              className={cn(
+                'flex items-center justify-end gap-2.5 transition-all duration-300',
+                isExpanded
+                  ? 'absolute bottom-3 right-3 lg:bottom-4 lg:right-4'
+                  : 'mt-4 lg:absolute lg:bottom-4 lg:right-4 lg:mt-0'
+              )}
+            >
+              <div ref={configRef} className="relative">
+                <AnimatePresence initial={false}>
+                  {isConfigOpen ? (
+                    <motion.div
+                      initial={{ opacity: 0, y: 12, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 12, scale: 0.98 }}
+                      transition={{ type: 'spring', bounce: 0.1, duration: 0.25 }}
+                      className="absolute bottom-full right-0 z-30 mb-2.5 w-[min(26rem,calc(100vw-2rem))] max-w-[26rem]"
+                    >
+                      <div className="bg-bg-secondary border border-border shadow-2xl overflow-hidden rounded-[1.5rem] p-2.5">
+                        <div className="flex h-88 flex-col gap-1.5 overflow-y-auto pr-1">
+                          <ContentTypeTabs
+                            activeType={contentType}
+                            availableTypes={availableTypes}
+                            onChange={(type) => setContentType(type, enabledModelIds)}
                           />
-                        ) : null}
 
-                        <CapabilityRenderer
-                          capabilities={visibleCapabilities}
-                          values={capabilityValues}
-                          batchCount={batchCount}
-                          onSetValue={setCapabilityValue}
-                          onSetBatchCount={setBatchCount}
-                        />
+                          {selectedModelDescriptor?.modes?.length ? (
+                            <ModeTabs
+                              modes={selectedModelDescriptor.modes}
+                              activeMode={activeMode}
+                              onChange={(modeId) => {
+                                setActiveMode(modeId)
+                              }}
+                            />
+                          ) : null}
 
-                        <ModelSelector
-                          models={modelsForType}
-                          value={selectedModelDescriptor?.id ?? ''}
-                          onChange={setSelectedModel}
-                        />
+                          <CapabilityRenderer
+                            capabilities={visibleCapabilities}
+                            values={capabilityValues}
+                            batchCount={batchCount}
+                            onSetValue={setCapabilityValue}
+                            onSetBatchCount={setBatchCount}
+                          />
 
-                        {selectedModelDescriptor?.id === 'lyria-3-clip-preview' ? (
-                          <div className="rounded-lg bg-black/20 p-2.5 text-[10px] text-text-muted leading-relaxed border border-white/5">
-                            <div className="flex items-center justify-between">
-                              <span className="font-semibold text-text-secondary">Duration</span>
-                              <span>30s Fixed</span>
+                          <ModelSelector
+                            models={modelsForType}
+                            value={selectedModelDescriptor?.id ?? ''}
+                            onChange={setSelectedModel}
+                          />
+
+                          {selectedModelDescriptor?.id === 'lyria-3-clip-preview' ? (
+                            <div className="rounded-lg bg-black/20 p-2.5 text-[10px] text-text-muted leading-relaxed border border-white/5">
+                              <div className="flex items-center justify-between">
+                                <span className="font-semibold text-text-secondary">Duration</span>
+                                <span>30s Fixed</span>
+                              </div>
                             </div>
+                          ) : selectedModelDescriptor?.id === 'lyria-3-pro-preview' ? (
+                            <div className="rounded-lg bg-black/20 p-2.5 text-[10px] text-text-muted leading-relaxed border border-white/5 mt-1">
+                              <div className="flex items-center justify-between">
+                                <span className="font-semibold text-text-secondary">
+                                  Max Duration
+                                </span>
+                                <span>Up to 184s (~3m 4s)</span>
+                              </div>
+                              <div className="mt-1 text-text-muted/70">
+                                Duration is primarily controlled via prompt instructions.
+                              </div>
+                            </div>
+                          ) : null}
+
+                          <div className="pt-2 text-center text-[11px] font-medium text-text-muted">
+                            Generating will use{' '}
+                            <span className="font-semibold text-text-secondary underline decoration-text-muted/60 underline-offset-2">
+                              {estimatedCredits} credits
+                            </span>
                           </div>
-                        ) : selectedModelDescriptor?.id === 'lyria-3-pro-preview' ? (
-                          <div className="rounded-lg bg-black/20 p-2.5 text-[10px] text-text-muted leading-relaxed border border-white/5 mt-1">
-                            <div className="flex items-center justify-between">
-                              <span className="font-semibold text-text-secondary">
-                                Max Duration
-                              </span>
-                              <span>Up to 184s (~3m 4s)</span>
-                            </div>
-                            <div className="mt-1 text-text-muted/70">
-                              Duration is primarily controlled via prompt instructions.
-                            </div>
-                          </div>
-                        ) : null}
-
-                        <div className="pt-2 text-center text-[11px] font-medium text-text-muted">
-                          Generating will use{' '}
-                          <span className="font-semibold text-text-secondary underline decoration-text-muted/60 underline-offset-2">
-                            {estimatedCredits} credits
-                          </span>
                         </div>
                       </div>
-                    </div>
-                  </motion.div>
-                ) : null}
-              </AnimatePresence>
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
 
-              <BottomActionBar
-                batchCount={batchCount}
-                contentType={contentType}
-                isOpen={isConfigOpen}
-                onClick={() => setIsConfigOpen((open) => !open)}
-              />
+                <BottomActionBar
+                  batchCount={batchCount}
+                  contentType={contentType}
+                  isOpen={isConfigOpen}
+                  onClick={() => setIsConfigOpen((open) => !open)}
+                />
+              </div>
+              <button
+                onClick={() => void handleGenerate()}
+                disabled={!prompt.trim() || isGenerating || !selectedModelDescriptor}
+                className={cn(
+                  'flex h-10 w-10 items-center justify-center rounded-full transition-all',
+                  prompt.trim() && selectedModelDescriptor
+                    ? 'bg-white text-black shadow-[0_4px_16px_rgba(0,0,0,0.35)]'
+                    : 'bg-bg-elevated text-text-muted',
+                  (!prompt.trim() || isGenerating || !selectedModelDescriptor) && 'cursor-not-allowed'
+                )}
+                type="button"
+              >
+                {isGenerating ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <ArrowRight className="h-5 w-5" />
+                )}
+              </button>
             </div>
-            <button
-              onClick={() => void handleGenerate()}
-              disabled={!prompt.trim() || isGenerating || !selectedModelDescriptor}
-              className={cn(
-                'flex h-10 w-10 items-center justify-center rounded-full transition-all',
-                prompt.trim() && selectedModelDescriptor
-                  ? 'bg-white text-black shadow-[0_4px_16px_rgba(0,0,0,0.35)]'
-                  : 'bg-bg-elevated text-text-muted',
-                (!prompt.trim() || isGenerating || !selectedModelDescriptor) && 'cursor-not-allowed'
-              )}
-              type="button"
-            >
-              {isGenerating ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <ArrowRight className="h-5 w-5" />
-              )}
-            </button>
-          </div>
-        </motion.div>
-        <SelectedOptionsDisplay
-          models={modelsForType}
-          activeModeDescriptor={activeModeDescriptor}
-          selectedModelDescriptor={selectedModelDescriptor}
-          capabilities={visibleCapabilities}
-          values={capabilityValues}
-          onSetModel={setSelectedModel}
-          onSetMode={setActiveMode}
-          onSetValue={setCapabilityValue}
-        />
+          </motion.div>
+          <SelectedOptionsDisplay
+            models={modelsForType}
+            activeModeDescriptor={activeModeDescriptor}
+            selectedModelDescriptor={selectedModelDescriptor}
+            capabilities={visibleCapabilities}
+            values={capabilityValues}
+            onSetModel={setSelectedModel}
+            onSetMode={setActiveMode}
+            onSetValue={setCapabilityValue}
+          />
         </div>
         <AssetPickerModal
           isOpen={isAssetPickerOpen}

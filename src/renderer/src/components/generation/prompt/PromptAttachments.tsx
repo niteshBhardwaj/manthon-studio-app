@@ -188,7 +188,7 @@ export function PromptAttachmentArea({
     const canAddMore = totalImages < (maxImages ?? 1)
 
     return (
-      <div className="w-full rounded-[1.1rem] bg-white/4 p-2.5">
+      <div className="w-full rounded-[1.1rem] bg-bg-elevated/100 border border-border p-2.5">
         <div className="mb-2 flex items-center justify-between">
           <span className="text-xs font-medium text-text-secondary">
             {contentType === 'audio' ? 'Ingredients' : 'Reference Images'}
@@ -244,7 +244,7 @@ export function PromptAttachmentArea({
 
   if (contentType === 'video' && activeMode === 'ingredients') {
     return (
-      <div className="w-full max-w-[19rem] rounded-[1.1rem] bg-white/4 p-2.5">
+      <div className="w-full max-w-[19rem] rounded-[1.1rem] bg-bg-elevated/100 border border-border p-2.5">
         <div className="mb-2 flex items-center justify-between">
           <span className="text-xs font-medium text-text-secondary">Ingredients</span>
           {referenceImages.length > 0 ? (

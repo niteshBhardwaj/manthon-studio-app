@@ -34,7 +34,7 @@ export function PillRow({
   variant?: 'soft' | 'text'
 }): JSX.Element {
   return (
-    <div className="grid auto-cols-fr grid-flow-col gap-2 overflow-x-auto">
+    <div className="flex w-full shrink-0 gap-2 overflow-x-auto">
       {options.map((option) => {
         const active = option.value === activeValue
 
@@ -44,7 +44,7 @@ export function PillRow({
             type="button"
             onClick={() => onChange(option.value)}
             className={cn(
-              'min-w-[4rem] rounded-[0.85rem] px-3 py-2 text-[0.85rem] font-medium transition-all',
+              'flex-1 min-w-[5rem] rounded-[0.85rem] px-3 py-2 text-[0.85rem] font-medium transition-all',
               variant === 'soft'
                 ? active
                   ? 'bg-white/18 text-text-primary'
@@ -74,10 +74,7 @@ export function AspectRatioRow({
   onChange: (value: string) => void
 }): JSX.Element {
   return (
-    <div
-      className="grid gap-2"
-      style={{ gridTemplateColumns: `repeat(${options.length || 1}, minmax(0, 1fr))` }}
-    >
+    <div className="flex w-full shrink-0 min-h-[3.25rem] gap-2 overflow-x-auto">
       {options.map((option) => {
         const active = option.value === activeValue
 
@@ -87,7 +84,7 @@ export function AspectRatioRow({
             type="button"
             onClick={() => onChange(option.value)}
             className={cn(
-              'flex h-[3.25rem] flex-col items-center justify-center gap-1.5 rounded-[1rem] transition-all',
+              'flex h-[3.25rem] flex-1 min-w-[4.5rem] flex-col items-center justify-center gap-1.5 rounded-[1rem] transition-all',
               active
                 ? 'bg-white/18 text-text-primary'
                 : 'bg-white/5 text-text-secondary hover:bg-white/10 hover:text-text-primary'

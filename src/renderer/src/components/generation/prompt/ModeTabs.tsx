@@ -13,10 +13,7 @@ export function ModeTabs({
   onChange: (modeId: string) => void
 }): JSX.Element {
   return (
-    <div
-      className="grid gap-2"
-      style={{ gridTemplateColumns: `repeat(${modes.length}, minmax(0, 1fr))` }}
-    >
+    <div className="flex w-full shrink-0 min-h-[2.75rem] gap-2 overflow-x-auto">
       {modes.map((mode) => {
         const active = mode.id === activeMode
         return (
@@ -25,7 +22,7 @@ export function ModeTabs({
             type="button"
             onClick={() => onChange(mode.id)}
             className={cn(
-              'flex h-[2.75rem] items-center justify-center gap-2 rounded-[1rem] border text-[0.85rem] font-medium transition-all',
+              'flex h-[2.75rem] flex-1 min-w-[6rem] items-center justify-center gap-2 rounded-[1rem] border text-[0.85rem] font-medium transition-all',
               active
                 ? 'border-transparent bg-white text-black'
                 : 'border-transparent bg-white/5 text-text-secondary hover:bg-white/10 hover:text-text-primary'
