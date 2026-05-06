@@ -185,6 +185,29 @@ export function registerIpcHandlers(): void {
     return { success: true }
   })
 
+  ipcMain.handle(
+    'generation:list',
+    async (
+      _event,
+      options?: {
+        projectId?: string | null
+        type?: 'video' | 'image' | 'audio'
+        limit?: number
+        offset?: number
+      }
+    ) => {
+      return appStore.listGenerations(options)
+    }
+  )
+
+  ipcMain.handle('generation:star', async (_event, id: string) => {
+    return appStore.toggleGenerationStar(id)
+  })
+
+  ipcMain.handle('generation:delete', async (_event, id: string) => {
+    return appStore.deleteGeneration(id)
+  })
+
   // ── Templates ───────────────────────────────────────────
   ipcMain.handle('templates:get', async () => {
     return appStore.getTemplates()
@@ -317,6 +340,21 @@ export function registerIpcHandlers(): void {
         console.warn(`[IPC] Failed to import ${filePath}:`, e)
       }
     }
+    return imported
+  })
+
+  ipcMain.handle('asset:import-paths', async (_event, projectId: string | undefined, paths: string[]) => {
+    const imported: Array<Awaited<ReturnType<typeof assetManager.importFromFile>>> = []
+
+    for (const filePath of paths) {
+      try {
+        const asset = await assetManager.importFromFile(projectId ?? 'default', filePath)
+        imported.push(asset)
+      } catch (e) {
+        console.warn(`[IPC] Failed to import dropped asset ${filePath}:`, e)
+      }
+    }
+
     return imported
   })
 

@@ -31,6 +31,33 @@ interface Template {
   category: string
 }
 
+interface ListGenerationsOptions {
+  projectId?: string | null
+  type?: 'video' | 'image' | 'audio'
+  limit?: number
+  offset?: number
+}
+
+export interface StoredGeneration {
+  id: string
+  project_id: string | null
+  type: 'video' | 'image' | 'audio'
+  status: string
+  prompt: string
+  negative_prompt: string
+  provider: string
+  model: string
+  config: Record<string, unknown>
+  result_asset_id: string | null
+  error: string | null
+  progress: number
+  started_at: number
+  completed_at: number | null
+  starred: number
+  cost_estimate: number
+  created_at: number
+}
+
 // ── Default templates (seeded into DB if empty) ──────────────
 
 const DEFAULT_TEMPLATES: Template[] = [
@@ -205,19 +232,21 @@ export const appStore = {
 
   // ── History (generations table) ────────────────────────────
 
-  addToHistory(operation: GenerationOperation): void {
+  addToHistory(operation: GenerationOperation & { config?: Record<string, unknown>; negativePrompt?: string }): void {
     databaseManager.run(
       `INSERT OR REPLACE INTO generations
-        (id, project_id, type, status, prompt, provider, model, config, result_asset_id, error, progress, started_at, completed_at, starred, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, '{}', ?, ?, ?, ?, ?, ?, ?)`,
+        (id, project_id, type, status, prompt, negative_prompt, provider, model, config, result_asset_id, error, progress, started_at, completed_at, starred, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         operation.id,
         operation.projectId ?? 'default',
         operation.type ?? 'video',
         operation.status ?? 'generating',
         operation.prompt ?? '',
+        operation.negativePrompt ?? '',
         operation.provider ?? 'unknown',
         operation._operationName ?? 'unknown',
+        JSON.stringify(operation.config ?? {}),
         operation.resultAssetId ?? null,
         operation.error ?? null,
         operation.progress ?? 0,
@@ -234,6 +263,56 @@ export const appStore = {
       'SELECT * FROM generations ORDER BY started_at DESC LIMIT 1000'
     )
     return rows.map(rowToOperation)
+  },
+
+  listGenerations(options?: ListGenerationsOptions): { items: StoredGeneration[]; total: number } {
+    const conditions: string[] = []
+    const params: unknown[] = []
+
+    if (options?.projectId) {
+      conditions.push('project_id = ?')
+      params.push(options.projectId)
+    }
+
+    if (options?.type) {
+      conditions.push('type = ?')
+      params.push(options.type)
+    }
+
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+    const limit = options?.limit ?? 1000
+    const offset = options?.offset ?? 0
+
+    const rows = databaseManager.query<GenerationRow>(
+      `SELECT * FROM generations ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
+    )
+
+    const totalRow = databaseManager.queryOne<{ count: number }>(
+      `SELECT COUNT(*) as count FROM generations ${where}`,
+      params
+    )
+
+    return {
+      items: rows.map((row) => rowToStoredGeneration(row)),
+      total: totalRow?.count ?? 0
+    }
+  },
+
+  toggleGenerationStar(id: string): StoredGeneration | null {
+    const row = databaseManager.queryOne<GenerationRow>('SELECT * FROM generations WHERE id = ?', [id])
+    if (!row) return null
+
+    const nextStar = row.starred ? 0 : 1
+    databaseManager.run('UPDATE generations SET starred = ? WHERE id = ?', [nextStar, id])
+
+    const updated = databaseManager.queryOne<GenerationRow>('SELECT * FROM generations WHERE id = ?', [id])
+    return updated ? rowToStoredGeneration(updated) : null
+  },
+
+  deleteGeneration(id: string): { success: boolean } {
+    databaseManager.run('DELETE FROM generations WHERE id = ?', [id])
+    return { success: true }
   },
 
   clearHistory(): void {
@@ -347,6 +426,7 @@ interface GenerationRow {
   completed_at: number | null
   starred: number
   cost_estimate: number
+  created_at: number
 }
 
 function rowToOperation(row: GenerationRow): GenerationOperation {
@@ -360,6 +440,25 @@ function rowToOperation(row: GenerationRow): GenerationOperation {
     progress: row.progress,
     startedAt: row.started_at,
     completedAt: row.completed_at ?? undefined,
+    projectId: row.project_id ?? 'default',
+    starred: Boolean(row.starred),
+    resultAssetId: row.result_asset_id ?? undefined,
     _operationName: row.model
+  }
+}
+
+function rowToStoredGeneration(row: GenerationRow): StoredGeneration {
+  return {
+    ...row,
+    type: row.type as StoredGeneration['type'],
+    config: parseGenerationConfig(row.config)
+  }
+}
+
+function parseGenerationConfig(value: string): Record<string, unknown> {
+  try {
+    return JSON.parse(value) as Record<string, unknown>
+  } catch {
+    return {}
   }
 }

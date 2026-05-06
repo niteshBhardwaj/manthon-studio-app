@@ -45,6 +45,9 @@ const manthanAPI = {
 
   getHistory: () => ipcRenderer.invoke('history:get'),
   clearHistory: () => ipcRenderer.invoke('history:clear'),
+  listGenerations: (options?: Record<string, unknown>) => ipcRenderer.invoke('generation:list', options),
+  starGeneration: (id: string) => ipcRenderer.invoke('generation:star', id),
+  deleteGeneration: (id: string) => ipcRenderer.invoke('generation:delete', id),
 
   getTemplates: () => ipcRenderer.invoke('templates:get'),
 
@@ -84,6 +87,8 @@ const manthanAPI = {
   readAsset: (id: string) => ipcRenderer.invoke('asset:read', id),
   deleteAsset: (id: string) => ipcRenderer.invoke('asset:delete', id),
   importAssets: (projectId?: string) => ipcRenderer.invoke('asset:import', projectId),
+  importAssetPaths: (projectId: string | undefined, paths: string[]) =>
+    ipcRenderer.invoke('asset:import-paths', projectId, paths),
   exportAssets: (ids: string[]) => ipcRenderer.invoke('asset:export', ids),
   getStorageStats: () => ipcRenderer.invoke('asset:stats'),
   openStorageFolder: () => ipcRenderer.invoke('storage:open-folder'),

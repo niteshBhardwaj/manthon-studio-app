@@ -76,6 +76,14 @@ interface ManthanAPI {
 
   getHistory: () => Promise<Record<string, unknown>[]>
   clearHistory: () => Promise<{ success: boolean }>
+  listGenerations: (options?: {
+    projectId?: string | null
+    type?: 'video' | 'image' | 'audio'
+    limit?: number
+    offset?: number
+  }) => Promise<{ items: GenerationRecord[]; total: number }>
+  starGeneration: (id: string) => Promise<GenerationRecord | null>
+  deleteGeneration: (id: string) => Promise<{ success: boolean }>
 
   getTemplates: () => Promise<Array<{ id: string; name: string; prompt: string; category: string }>>
 
@@ -116,6 +124,7 @@ interface ManthanAPI {
   readAsset: (id: string) => Promise<string | null>
   deleteAsset: (id: string) => Promise<boolean>
   importAssets: (projectId?: string) => Promise<AssetInfo[]>
+  importAssetPaths: (projectId: string | undefined, paths: string[]) => Promise<AssetInfo[]>
   exportAssets: (ids: string[]) => Promise<{ success: boolean; count?: number; error?: string }>
   getStorageStats: () => Promise<StorageReport>
   openStorageFolder: () => Promise<void>
@@ -167,6 +176,26 @@ interface AssetInfo {
   tags: string[]
   created_at: number
   updated_at: number
+}
+
+interface GenerationRecord {
+  id: string
+  project_id: string | null
+  type: 'video' | 'image' | 'audio'
+  status: string
+  prompt: string
+  negative_prompt: string
+  provider: string
+  model: string
+  config: Record<string, unknown>
+  result_asset_id: string | null
+  error: string | null
+  progress: number
+  started_at: number
+  completed_at: number | null
+  starred: number
+  cost_estimate: number
+  created_at: number
 }
 
 declare global {
