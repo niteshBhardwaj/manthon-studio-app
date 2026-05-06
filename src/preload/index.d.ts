@@ -111,7 +111,7 @@ interface ManthanAPI {
     source?: 'generated' | 'imported' | 'uploaded'
     limit?: number
     offset?: number
-  }) => Promise<{ assets: AssetInfo[]; total: number }>
+  }) => Promise<{ assets: AssetInfo[]; total: number; typeCounts: Record<string, number> }>
   getAsset: (id: string) => Promise<AssetInfo | null>
   readAsset: (id: string) => Promise<string | null>
   deleteAsset: (id: string) => Promise<boolean>

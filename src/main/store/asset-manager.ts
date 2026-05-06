@@ -179,7 +179,7 @@ class AssetManager {
     source?: 'generated' | 'imported' | 'uploaded'
     limit?: number
     offset?: number
-  }): { assets: Asset[]; total: number } {
+  }): { assets: Asset[]; total: number; typeCounts: Record<string, number> } {
     const conditions: string[] = []
     const params: unknown[] = []
 
@@ -210,9 +210,24 @@ class AssetManager {
       params
     )
 
+    // Calculate counts for all types in this project
+    const typeCounts: Record<string, number> = { video: 0, image: 0, audio: 0 }
+    const projectOnlyWhere = options?.projectId ? 'WHERE project_id = ?' : ''
+    const projectOnlyParams = options?.projectId ? [options.projectId] : []
+    
+    const countRows = databaseManager.query<{ type: string; count: number }>(
+      `SELECT type, COUNT(*) as count FROM assets ${projectOnlyWhere} GROUP BY type`,
+      projectOnlyParams
+    )
+
+    for (const row of countRows) {
+      typeCounts[row.type] = row.count
+    }
+
     return {
       assets: rows.map((r) => this.hydrate(r)),
-      total: countRow?.count ?? 0
+      total: countRow?.count ?? 0,
+      typeCounts
     }
   }
 

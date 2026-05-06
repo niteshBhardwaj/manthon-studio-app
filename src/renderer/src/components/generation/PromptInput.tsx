@@ -387,6 +387,12 @@ export function PromptInput(): JSX.Element {
                             onChange={(type) => setContentType(type, enabledModelIds)}
                           />
 
+                          <ModelSelector
+                            models={modelsForType}
+                            value={selectedModelDescriptor?.id ?? ''}
+                            onChange={setSelectedModel}
+                          />
+
                           {selectedModelDescriptor?.modes?.length ? (
                             <ModeTabs
                               modes={selectedModelDescriptor.modes}
@@ -403,12 +409,6 @@ export function PromptInput(): JSX.Element {
                             batchCount={batchCount}
                             onSetValue={setCapabilityValue}
                             onSetBatchCount={setBatchCount}
-                          />
-
-                          <ModelSelector
-                            models={modelsForType}
-                            value={selectedModelDescriptor?.id ?? ''}
-                            onChange={setSelectedModel}
                           />
 
                           {selectedModelDescriptor?.id === 'lyria-3-clip-preview' ? (

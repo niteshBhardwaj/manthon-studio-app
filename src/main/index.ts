@@ -66,16 +66,27 @@ app.whenReady().then(async () => {
 
   // Register custom protocol for local asset previews
   protocol.handle('asset', (request) => {
-    console.log('[asset-protocol] Request URL:', request.url)
     let rawPath = request.url.slice('asset://'.length)
-    // Handle cases where the URL parser adds an extra leading slash on Windows
-    if (process.platform === 'win32' && rawPath.startsWith('/')) {
-      rawPath = rawPath.slice(1)
+    
+    if (process.platform === 'win32') {
+      // Remove any leading slashes that might have been added by URL parsing
+      rawPath = rawPath.replace(/^\/+/, '')
+      
+      // If the path starts with a drive letter but no colon (e.g. "c/Users"), restore it
+      if (/^[a-zA-Z]\//.test(rawPath)) {
+        rawPath = rawPath[0] + ':' + rawPath.slice(1)
+      }
     }
+    
     rawPath = decodeURIComponent(rawPath)
-    const fileUrl = pathToFileURL(rawPath).toString()
-    console.log('[asset-protocol] Resolved file URL:', fileUrl)
-    return net.fetch(fileUrl)
+    
+    try {
+      const fileUrl = pathToFileURL(rawPath).toString()
+      return net.fetch(fileUrl)
+    } catch (err) {
+      console.error('[asset-protocol] Error fetching asset:', err)
+      return new Response(null, { status: 404 })
+    }
   })
 
   // Initialize database & asset storage

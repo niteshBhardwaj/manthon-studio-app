@@ -45,8 +45,11 @@ interface Asset {
   type: 'video' | 'image' | 'audio'
   source: 'generated' | 'imported' | 'uploaded'
   storage_path: string
+  thumbnail_path: string | null
+  metadata: Record<string, unknown>
   tags: string[]
   created_at: number
+  updated_at: number
 }
 
 type FilterType = 'all' | 'video' | 'image' | 'audio'
@@ -259,6 +262,11 @@ export function AssetsPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [assets, setAssets] = useState<Asset[]>([])
   const [total, setTotal] = useState(0)
+  const [typeCounts, setTypeCounts] = useState<Record<string, number>>({
+    video: 0,
+    image: 0,
+    audio: 0
+  })
   const [loading, setLoading] = useState(true)
   const [filterType, setFilterType] = useState<FilterType>('all')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -270,11 +278,23 @@ export function AssetsPage() {
     if (!window.manthan) return
     setLoading(true)
     try {
-      const opts: Record<string, unknown> = { projectId: activeProjectId, limit: 200 }
+      const opts = { projectId: activeProjectId, limit: 200 } as any
       if (filterType !== 'all') opts.type = filterType
-      const result = await window.manthan.listAssets(opts as any)
+      const result = await window.manthan.listAssets(opts)
       setAssets(result.assets as Asset[])
-      setTotal(result.total)
+      
+      // If we are showing 'all', the total returned is the project total
+      // Otherwise, we use the typeCounts for individual labels
+      if (filterType === 'all') {
+        setTotal(result.total)
+      }
+      
+      if (result.typeCounts) {
+        setTypeCounts(result.typeCounts)
+        // Ensure total is project-wide regardless of current filter
+        const projectTotal = Object.values(result.typeCounts).reduce((a, b) => a + b, 0)
+        setTotal(projectTotal)
+      }
     } catch (e) {
       console.error('[AssetsPage] Failed to load:', e)
     }
@@ -352,15 +372,6 @@ export function AssetsPage() {
         return <FileImage className="w-4 h-4 text-amber-400" />
     }
   }
-
-  // Filter counts
-  const typeCounts = assets.reduce(
-    (acc, a) => {
-      acc[a.type] = (acc[a.type] || 0) + 1
-      return acc
-    },
-    {} as Record<string, number>
-  )
 
   const filterTabs: { key: FilterType; label: string; icon: any }[] = [
     { key: 'all', label: `All (${total})`, icon: FolderOpen },
