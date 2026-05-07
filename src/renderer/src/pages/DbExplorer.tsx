@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type JSX } from 'react'
+import { useState, useEffect, useCallback, type JSX, Fragment } from 'react'
 import { 
   Database, 
   Play, 
@@ -7,7 +7,9 @@ import {
   Terminal, 
   Info,
   DatabaseZap,
-  HardDrive
+  HardDrive,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react'
 
 interface DbTable {
@@ -32,6 +34,7 @@ export function DbExplorer(): JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [dbPath, setDbPath] = useState('')
   const [logLevel, setLogLevel] = useState('info')
+  const [expandedRowIndex, setExpandedRowIndex] = useState<number | null>(null)
 
   const refreshTables = useCallback(async () => {
     setLoading(true)
@@ -63,6 +66,7 @@ export function DbExplorer(): JSX.Element {
     setSelectedTable(tableName)
     setLoading(true)
     setError(null)
+    setExpandedRowIndex(null)
     try {
       const info = await window.manthan.getDbTableInfo(tableName)
       setColumns(info)
@@ -82,6 +86,7 @@ export function DbExplorer(): JSX.Element {
     if (!query.trim()) return
     setLoading(true)
     setError(null)
+    setExpandedRowIndex(null)
     try {
       const data = await window.manthan.queryDb(query)
       setResults(data)
@@ -230,6 +235,7 @@ export function DbExplorer(): JSX.Element {
                 <table className="w-full border-collapse text-left">
                   <thead className="sticky top-0 bg-[#0d0e12] z-10">
                     <tr>
+                      <th className="px-4 py-3 border-b border-white/10 w-10"></th>
                       {columns.map(col => (
                         <th key={col.name} className="px-4 py-3 border-b border-white/10 text-[10px] font-bold uppercase tracking-widest text-slate-500 whitespace-nowrap">
                           {col.name}
@@ -239,25 +245,84 @@ export function DbExplorer(): JSX.Element {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
-                    {results.map((row, i) => (
-                      <tr key={i} className="hover:bg-white/[0.02] transition-colors group">
-                        {columns.map(col => {
-                          const val = row[col.name];
-                          let displayVal = String(val);
-                          if (val === null) displayVal = 'NULL';
-                          if (typeof val === 'object') displayVal = JSON.stringify(val);
-                          if (displayVal.length > 100) displayVal = displayVal.substring(0, 100) + '...';
-                          
-                          return (
-                            <td key={col.name} className="px-4 py-3 text-xs font-mono text-slate-400 whitespace-nowrap max-w-xs overflow-hidden truncate group-hover:text-amber-200/70 transition-colors">
-                              {val === null ? (
-                                <span className="text-slate-600 italic">null</span>
-                              ) : displayVal}
+                    {results.map((row, i) => {
+                      const isExpanded = expandedRowIndex === i;
+                      return (
+                        <Fragment key={i}>
+                          <tr 
+                            onClick={() => setExpandedRowIndex(isExpanded ? null : i)}
+                            className={`hover:bg-white/[0.04] cursor-pointer transition-all group ${
+                              isExpanded ? 'bg-amber-500/[0.05] shadow-[inset_4px_0_0_0_#f59e0b]' : ''
+                            }`}
+                          >
+                            <td className="px-4 py-3 text-center">
+                              {isExpanded ? (
+                                <ChevronDown className="w-4 h-4 text-amber-500" />
+                              ) : (
+                                <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-slate-400" />
+                              )}
                             </td>
-                          )
-                        })}
-                      </tr>
-                    ))}
+                            {columns.map(col => {
+                              const val = row[col.name];
+                              let displayVal = String(val);
+                              if (val === null) displayVal = 'NULL';
+                              if (typeof val === 'object') displayVal = JSON.stringify(val);
+                              if (displayVal.length > 100) displayVal = displayVal.substring(0, 100) + '...';
+                              
+                              return (
+                                <td key={col.name} className="px-4 py-3 text-xs font-mono text-slate-400 whitespace-nowrap max-w-xs overflow-hidden truncate group-hover:text-amber-200/70 transition-colors">
+                                  {val === null ? (
+                                    <span className="text-slate-600 italic">null</span>
+                                  ) : displayVal}
+                                </td>
+                              )
+                            })}
+                          </tr>
+                          {isExpanded && (
+                            <tr>
+                              <td colSpan={columns.length + 1} className="px-6 py-8 bg-black/40 border-b border-white/5 shadow-inner">
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 max-w-5xl">
+                                  {columns.map(col => (
+                                    <div key={col.name} className="flex flex-col gap-2 p-4 rounded-xl bg-slate-900/40 border border-white/5 hover:border-amber-500/20 transition-colors group/cell">
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 group-hover/cell:text-amber-500 transition-colors">
+                                            {col.name}
+                                          </span>
+                                          <span className="text-[8px] bg-white/5 px-1.5 py-0.5 rounded text-slate-600 font-mono">
+                                            {col.type}
+                                          </span>
+                                        </div>
+                                        <button 
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const val = row[col.name];
+                                            const textToCopy = typeof val === 'object' ? JSON.stringify(val, null, 2) : String(val);
+                                            navigator.clipboard.writeText(textToCopy);
+                                          }}
+                                          className="text-[10px] text-slate-600 hover:text-white px-2 py-1 rounded hover:bg-white/5 transition-all"
+                                        >
+                                          Copy
+                                        </button>
+                                      </div>
+                                      <div className="text-xs font-mono text-amber-200/90 break-all whitespace-pre-wrap leading-relaxed max-h-[400px] overflow-y-auto custom-scrollbar">
+                                        {row[col.name] === null ? (
+                                          <span className="text-slate-700 italic">null</span>
+                                        ) : typeof row[col.name] === 'object' ? (
+                                          JSON.stringify(row[col.name], null, 2)
+                                        ) : (
+                                          String(row[col.name])
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      )
+                    })}
                   </tbody>
                 </table>
               ) : !loading && (
