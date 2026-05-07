@@ -105,7 +105,7 @@ export function VideoPlayerControls(props: VideoPlayerControlsProps): JSX.Elemen
       )}
     >
       <div className="pointer-events-auto space-y-3">
-        <div className="relative">
+        <div className="group/progress relative h-1.5 w-full rounded-full bg-white/20">
           {previewTime !== null ? (
             <div
               className="absolute -top-8 -translate-x-1/2 rounded-md bg-black/85 px-2 py-1 text-[10px] text-white"
@@ -123,7 +123,15 @@ export function VideoPlayerControls(props: VideoPlayerControlsProps): JSX.Elemen
             onChange={(event) => onSeek(Number(event.target.value))}
             onMouseMove={onPreviewChange}
             onMouseLeave={onPreviewLeave}
-            className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-white/20 accent-white"
+            className="absolute inset-0 z-10 w-full cursor-pointer opacity-0"
+          />
+          <div
+            className="absolute left-0 top-0 h-full rounded-full bg-white"
+            style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
+          />
+          <div
+            className="absolute -top-[3px] h-3 w-3 -translate-x-1/2 rounded-full bg-white opacity-0 shadow-md transition-opacity group-hover/progress:opacity-100"
+            style={{ left: `${(currentTime / (duration || 1)) * 100}%` }}
           />
         </div>
 

@@ -43,6 +43,7 @@ export function VideoPlayer({
   const [derivedPoster, setDerivedPoster] = useState<string | undefined>(poster)
   const [previewTime, setPreviewTime] = useState<number | null>(null)
   const [previewPosition, setPreviewPosition] = useState(0)
+  const [isHovered, setIsHovered] = useState(false)
   const [resolvedSrc, setResolvedSrc] = useState(src)
   const controlsTimer = useRef<number | null>(null)
   const { addToast } = useAppStore()
@@ -127,9 +128,14 @@ export function VideoPlayer({
   }, [])
 
   useEffect(() => {
-    if (!autoPlay || compact) return
+    if (!autoPlay || compact || !resolvedSrc) return
+    void videoRef.current?.play().catch(() => setIsPlaying(false))
+  }, [autoPlay, compact, resolvedSrc])
+
+  useEffect(() => {
+    if (!compact || !isHovered || !resolvedSrc) return
     void videoRef.current?.play().catch(() => undefined)
-  }, [autoPlay, compact, src])
+  }, [compact, isHovered, resolvedSrc])
 
   useEffect(
     () => () => {
@@ -316,7 +322,20 @@ export function VideoPlayer({
     return (
       <div
         ref={containerRef}
-        className={cn('relative h-full w-full overflow-hidden bg-black', className)}
+        onMouseEnter={() => {
+          setIsHovered(true)
+          setIsPlaying(true)
+        }}
+        onMouseLeave={() => {
+          setIsHovered(false)
+          setIsPlaying(false)
+          if (videoRef.current) {
+            videoRef.current.pause()
+            videoRef.current.currentTime = 0
+            setCurrentTime(0)
+          }
+        }}
+        className={cn('group relative h-full w-full overflow-hidden bg-black', className)}
       >
         <video
           key={resolvedSrc}
@@ -330,20 +349,35 @@ export function VideoPlayer({
           className="h-full w-full object-cover"
           onLoadedMetadata={handleLoadedMetadata}
           onTimeUpdate={handleTimeUpdate}
-          onMouseEnter={(event) => {
-            void event.currentTarget.play().catch(() => undefined)
-            setIsPlaying(true)
-          }}
-          onMouseLeave={(event) => {
-            event.currentTarget.pause()
-            event.currentTarget.currentTime = 0
-            setCurrentTime(0)
-            setIsPlaying(false)
-          }}
           onClick={(event) => {
             event.preventDefault()
           }}
         />
+
+        {/* Progress Bar (Compact) */}
+        <div className="absolute inset-x-0 bottom-0 z-30 h-[3px] w-full bg-black/20 opacity-0 transition-all duration-200 group-hover:opacity-100 hover:h-[5px]">
+          <div className="group/progress relative h-full w-full bg-white/10">
+            <input
+              type="range"
+              min={0}
+              max={duration || 0}
+              step={0.01}
+              value={currentTime}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(event) => {
+                event.stopPropagation()
+                handleSeek(Number(event.target.value))
+              }}
+              className="absolute inset-0 z-10 w-full cursor-pointer opacity-0"
+            />
+            <div
+              className="absolute left-0 top-0 h-full bg-white"
+              style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
+            />
+          </div>
+        </div>
+
         {!isPlaying ? (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/10 transition-opacity">
             <div className="rounded-full bg-white/15 p-3 backdrop-blur-sm">
