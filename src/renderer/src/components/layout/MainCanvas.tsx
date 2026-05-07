@@ -11,6 +11,7 @@ import { HistoryPage } from '../../pages/HistoryPage'
 import { AssetsPage } from '../../pages/AssetsPage'
 import { QueueDashboard } from '../queue/QueueDashboard'
 import { Dashboard } from '../dashboard/Dashboard'
+import { DbExplorer } from '../../pages/DbExplorer'
 
 export function MainCanvas(): JSX.Element {
   const { activeSidebarTab } = useAppStore()
@@ -23,6 +24,7 @@ export function MainCanvas(): JSX.Element {
         {activeSidebarTab === 'history' && <HistoryPage />}
         {activeSidebarTab === 'assets' && <AssetsPage />}
         {activeSidebarTab === 'templates' && <TemplateSelector />}
+        {activeSidebarTab === 'db-explorer' && <DbExplorer />}
       </div>
 
       {activeSidebarTab === 'create' && <PromptInput />}

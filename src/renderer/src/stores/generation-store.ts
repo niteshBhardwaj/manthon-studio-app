@@ -42,6 +42,7 @@ export interface GenerationJob {
     data: string
     mimeType: string
     uri?: string
+    assetId?: string
   }
   error?: string
   progress: number

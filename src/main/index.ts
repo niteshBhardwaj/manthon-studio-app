@@ -14,6 +14,7 @@ import { assetManager } from './store/asset-manager'
 import { appStore } from './store/app-store'
 import { storageManager } from './store/storage-manager'
 import { queueManager } from './queue/queue-manager'
+import { logger } from './logger'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -84,7 +85,7 @@ app.whenReady().then(async () => {
       const fileUrl = pathToFileURL(rawPath).toString()
       return net.fetch(fileUrl)
     } catch (err) {
-      console.error('[asset-protocol] Error fetching asset:', err)
+      logger.error('Asset', 'Error fetching asset via protocol:', { err, url: request.url })
       return new Response(null, { status: 404 })
     }
   })
@@ -104,6 +105,8 @@ app.whenReady().then(async () => {
   // Initialize persistent queue processing after storage and providers are ready
   queueManager.initialize()
 
+  logger.info('App', 'Main process initialization complete')
+  
   createWindow()
 
   app.on('activate', () => {

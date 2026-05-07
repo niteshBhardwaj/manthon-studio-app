@@ -6,6 +6,7 @@ import { assetManager, type Asset } from '../store/asset-manager'
 import { databaseManager } from '../store/db'
 import { jobProcessor } from './job-processor'
 import { notifyBatchComplete, notifyJobComplete, notifyJobFailed } from '../notifications'
+import { logger } from '../logger'
 import type {
   EnqueueJobInput,
   QueueConfig,
@@ -135,6 +136,8 @@ class QueueManager {
       throw new Error('Failed to create queue job')
     }
 
+    logger.info('Queue', `Job enqueued: ${job.type} | ${job.model} | ID: ${job.id}`)
+    
     void this.emitQueueUpdate()
     void this.processNext()
 
@@ -177,6 +180,9 @@ class QueueManager {
       running.controller.abort()
       await running.cancel?.()
       this.runningJobs.delete(id)
+      logger.info('Queue', `Job cancelled (running): ${id}`)
+    } else {
+      logger.info('Queue', `Job cancelled (pending): ${id}`)
     }
 
     this.progressByJob.delete(id)
@@ -213,6 +219,7 @@ class QueueManager {
     )
 
     this.progressByJob.delete(id)
+    logger.info('Queue', `Job retry requested: ${id}`)
     void this.emitQueueUpdate()
     void this.processNext()
     return { success: true }
@@ -293,6 +300,8 @@ class QueueManager {
       [now, job.id]
     )
 
+    logger.info('Queue', `Job started: ${job.type} | ${job.model} | ID: ${job.id}`)
+    
     void this.emitQueueUpdate()
     this.emitToWindows('queue:job-progress', {
       jobId: job.id,
@@ -351,7 +360,8 @@ class QueueManager {
       assetId: asset?.id ?? result.assetId,
       assetPath: asset?.storage_path ?? result.assetPath,
       thumbnailPath: asset?.thumbnail_path ?? result.thumbnailPath,
-      filename: asset?.filename ?? result.filename
+      filename: asset?.filename ?? result.filename,
+      uri: asset ? undefined : result.uri
     }
 
     databaseManager.run(
@@ -360,6 +370,9 @@ class QueueManager {
        WHERE id = ?`,
       [JSON.stringify(storedResult), completedAt, id]
     )
+
+    const elapsed = job.started_at ? (completedAt - job.started_at) / 1000 : 0
+    logger.info('Queue', `Job completed: ${id} (elapsed: ${elapsed.toFixed(1)}s)`)
 
     appStore.addToHistory({
       id: job.id,
@@ -378,7 +391,7 @@ class QueueManager {
         type: storedResult.type,
         data: storedResult.data ?? '',
         mimeType: storedResult.mimeType ?? 'application/octet-stream',
-        uri: storedResult.uri,
+        uri: asset ? undefined : storedResult.uri,
         duration: storedResult.duration,
         metadata: storedResult.metadata
       },
@@ -434,6 +447,8 @@ class QueueManager {
        WHERE id = ?`,
       [error, completedAt, id]
     )
+
+    logger.error('Queue', `Job failed: ${id}`, { error })
 
     appStore.addToHistory({
       id: job.id,
@@ -510,7 +525,7 @@ class QueueManager {
         })
       }
     } catch (error) {
-      console.warn(`[QueueManager] Failed to persist asset for ${job.id}:`, error)
+      logger.error('Queue', `Failed to persist asset for ${job.id}`, { error })
     }
 
     return null

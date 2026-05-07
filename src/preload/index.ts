@@ -109,7 +109,16 @@ const manthanAPI = {
   onQueueJobComplete: (callback: (payload: unknown) => void) =>
     subscribe('queue:job-complete', callback),
   onQueueJobFailed: (callback: (payload: unknown) => void) =>
-    subscribe('queue:job-failed', callback)
+    subscribe('queue:job-failed', callback),
+
+  // ── Dev Tools ───────────────────────────────────────────
+  isDev: () => ipcRenderer.invoke('dev:is-dev'),
+  getLogLevel: () => ipcRenderer.invoke('dev:get-log-level'),
+  setLogLevel: (level: string) => ipcRenderer.invoke('dev:set-log-level', level),
+  getDbTables: () => ipcRenderer.invoke('dev:db-tables'),
+  queryDb: (sql: string) => ipcRenderer.invoke('dev:db-query', sql),
+  getDbTableInfo: (table: string) => ipcRenderer.invoke('dev:db-table-info', table),
+  getDbPath: () => ipcRenderer.invoke('dev:db-path')
 }
 
 if (process.contextIsolated) {

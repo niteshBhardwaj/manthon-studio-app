@@ -7,6 +7,8 @@ import { app } from 'electron'
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import { join } from 'path'
 
+import { logger } from '../logger'
+
 export class JsonStore<T extends Record<string, unknown>> {
   private data: T
   private filePath: string
@@ -42,7 +44,7 @@ export class JsonStore<T extends Record<string, unknown>> {
     try {
       writeFileSync(this.filePath, JSON.stringify(this.data, null, 2), 'utf-8')
     } catch (e) {
-      console.error('Failed to save store:', e)
+      logger.error('App', 'Failed to save store:', e)
     }
   }
 }

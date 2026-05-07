@@ -23,7 +23,9 @@ function formatJobConfig(job: GenerationJob): string {
 
 function getJobSrc(job: GenerationJob): string {
   if (!job.result) return ''
-  return job.result.uri || `data:${job.result.mimeType};base64,${job.result.data}`
+  if (job.result.data) return `data:${job.result.mimeType};base64,${job.result.data}`
+  if (job.result.uri?.includes('generativelanguage.googleapis.com/download/')) return ''
+  return job.result.uri || ''
 }
 
 export function VideoLightbox({
@@ -152,6 +154,7 @@ export function VideoLightbox({
               <div className="space-y-5">
                 <VideoPlayer
                   src={getJobSrc(displayJob)}
+                  assetId={displayJob.result?.assetId}
                   mimeType={displayJob.result?.mimeType}
                   autoPlay
                   className="aspect-video w-full"

@@ -28,6 +28,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { cn } from '../lib/utils'
 import { useProjectStore } from '../stores/project-store'
 import { VideoPlayer } from '../components/player/VideoPlayer'
+import { AudioPlayer } from '../components/player/AudioPlayer'
 import {
   MorphingDialog,
   MorphingDialogTrigger,
@@ -75,12 +76,36 @@ function AssetVideoSurface({
   className?: string
   autoPlay?: boolean
 }) {
+  return (
+    <VideoPlayer
+      src={getAssetSrc(asset)}
+      assetId={asset.id}
+      mimeType={asset.mime_type}
+      poster={getAssetPoster(asset)}
+      compact={compact}
+      autoPlay={autoPlay}
+      className={className}
+    />
+  )
+}
+
+function AssetAudioSurface({
+  asset,
+  compact = false,
+  className,
+  autoPlay = false
+}: {
+  asset: Asset
+  compact?: boolean
+  className?: string
+  autoPlay?: boolean
+}) {
   const [resolvedSrc, setResolvedSrc] = useState<string>(getAssetSrc(asset))
 
   useEffect(() => {
     let cancelled = false
 
-    const loadVideoData = async () => {
+    const loadAudioData = async () => {
       if (!window.manthan) return
 
       try {
@@ -89,11 +114,11 @@ function AssetVideoSurface({
           setResolvedSrc(`data:${asset.mime_type};base64,${base64}`)
         }
       } catch (error) {
-        console.error('[AssetsPage] Failed to read video asset:', error)
+        console.error('[AssetsPage] Failed to read audio asset:', error)
       }
     }
 
-    void loadVideoData()
+    void loadAudioData()
 
     return () => {
       cancelled = true
@@ -101,10 +126,9 @@ function AssetVideoSurface({
   }, [asset.id, asset.mime_type, asset.storage_path])
 
   return (
-    <VideoPlayer
+    <AudioPlayer
       src={resolvedSrc}
       mimeType={asset.mime_type}
-      poster={getAssetPoster(asset)}
       compact={compact}
       autoPlay={autoPlay}
       className={className}
@@ -139,9 +163,9 @@ const MorphingMedia = ({ asset, className }: { asset: Asset; className?: string 
   return (
     <motion.div
       layoutId={`dialog-media-${uniqueId}`}
-      className={cn('flex items-center justify-center bg-bg-secondary', className)}
+      className={cn('flex items-center justify-center bg-bg-secondary h-full w-full', className)}
     >
-      <FileAudio className="w-16 h-16 text-text-muted" />
+      <AssetAudioSurface asset={asset} compact className="h-full w-full" />
     </motion.div>
   )
 }
@@ -229,10 +253,9 @@ const AssetDetailModalContent = ({
           {asset.type === 'audio' && (
             <motion.div
               layoutId={`dialog-media-${uniqueId}`}
-              className="flex flex-col items-center gap-6"
+              className="flex flex-col items-center gap-6 w-full max-w-2xl"
             >
-              <Music className="w-24 h-24 text-text-muted opacity-50" />
-              <audio src={src} controls className="w-80" />
+              <AssetAudioSurface asset={asset} autoPlay className="w-full" />
             </motion.div>
           )}
         </div>

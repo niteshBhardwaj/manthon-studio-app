@@ -13,6 +13,7 @@ import {
   AudioGenParams,
   GenerationResult
 } from './base'
+import { logger } from '../logger'
 
 export class GoogleLyriaProvider implements MediaProvider {
   id = 'google-lyria'
@@ -48,6 +49,7 @@ export class GoogleLyriaProvider implements MediaProvider {
 
   async initialize(apiKey: string): Promise<void> {
     this.client = new GoogleGenAI({ apiKey })
+    logger.info('Provider', 'Google Lyria 3 initialized')
   }
 
   isInitialized(): boolean {
@@ -87,8 +89,14 @@ export class GoogleLyriaProvider implements MediaProvider {
     const model = params.model || this.config.defaultModel
     const isPro = model.includes('pro')
 
+    logger.debug('Provider', 'generateAudio() called', {
+      model,
+      duration: params.duration,
+      hasImages: !!params.referenceImages?.length
+    })
+
     try {
-      const contents: Array<string | { inlineData: { data: string; mimeType: string } }> = []
+      let contents: string | Array<{ text: string } | { inlineData: { data: string; mimeType: string } }>
 
       let finalPrompt = params.prompt
 
@@ -97,11 +105,8 @@ export class GoogleLyriaProvider implements MediaProvider {
         finalPrompt = `${finalPrompt}\n\n(Instruction: Create a ${params.duration}-second song)`
       }
 
-      if (finalPrompt) {
-        contents.push(finalPrompt)
-      }
-
       if (isPro && params.referenceImages && params.referenceImages.length > 0) {
+        contents = finalPrompt ? [{ text: finalPrompt }] : []
         for (const img of params.referenceImages) {
           contents.push({
             inlineData: {
@@ -110,33 +115,39 @@ export class GoogleLyriaProvider implements MediaProvider {
             }
           })
         }
+      } else {
+        contents = finalPrompt
       }
 
-      // Default to wav for Pro if requested, else mp3
-      const mimeType = params.audioFormat === 'wav' ? 'audio/wav' : 'audio/mp3'
-
-      const response = await this.client.models.generateContent({
+      const requestedFormat = params.audioFormat ?? 'mp3'
+      const canRequestWav = isPro && requestedFormat === 'wav'
+      const fallbackMimeType = canRequestWav ? 'audio/wav' : 'audio/mpeg'
+      const request: Parameters<typeof this.client.models.generateContent>[0] = {
         model,
-        contents,
-        config: {
+        contents
+      }
+
+      if (canRequestWav) {
+        request.config = {
           responseModalities: ['AUDIO', 'TEXT'],
-          responseMimeType: mimeType
+          responseMimeType: 'audio/wav'
         }
-      })
+      }
+
+      const response = await this.client.models.generateContent(request)
 
       const candidate = response.candidates?.[0]
       const parts = candidate?.content?.parts || []
 
       let audioData = ''
-      let audioMimeType = mimeType
+      let audioMimeType = fallbackMimeType
 
-      // Parse lyrics / audio according to the documentation
+      // Lyria returns the generated media as inline audio bytes.
       for (const part of parts) {
         if (part.inlineData) {
           audioData = part.inlineData.data || ''
-          audioMimeType = part.inlineData.mimeType || mimeType
+          audioMimeType = part.inlineData.mimeType || fallbackMimeType
         }
-        // Could optionally extract part.text for lyrics and attach to metadata
       }
 
       if (!audioData) {
@@ -150,6 +161,7 @@ export class GoogleLyriaProvider implements MediaProvider {
         duration: params.duration || (isPro ? 60 : 30)
       }
     } catch (error: unknown) {
+      logger.error('Provider', 'generateAudio() failed', { error: error instanceof Error ? error.message : 'Unknown' })
       throw new Error(
         `Audio generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
       )

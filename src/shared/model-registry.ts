@@ -627,10 +627,7 @@ export const MODEL_REGISTRY: ModelDescriptor[] = [
       {
         type: 'audio_format',
         label: 'Audio Format',
-        options: [
-          { value: 'mp3', label: 'MP3', default: true },
-          { value: 'wav', label: 'WAV' }
-        ],
+        options: [{ value: 'mp3', label: 'MP3', default: true }],
         defaultValue: 'mp3'
       }
     ],

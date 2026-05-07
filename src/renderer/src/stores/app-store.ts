@@ -5,7 +5,7 @@
 
 import { create } from 'zustand'
 
-type SidebarTab = 'create' | 'queue' | 'history' | 'assets' | 'templates' | 'settings'
+type SidebarTab = 'create' | 'queue' | 'history' | 'assets' | 'templates' | 'settings' | 'db-explorer'
 type ModalType = 'settings' | 'api-keys' | 'prompt-builder' | null
 type ToastTone = 'info' | 'success' | 'error'
 
@@ -46,6 +46,10 @@ interface AppState {
   // Preferences
   playCompletionSound: boolean
   setPlayCompletionSound: (value: boolean) => void
+
+  // Dev
+  isDev: boolean
+  setIsDev: (value: boolean) => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -93,5 +97,9 @@ export const useAppStore = create<AppState>((set) => ({
 
   // Preferences
   playCompletionSound: true,
-  setPlayCompletionSound: (value) => set({ playCompletionSound: value })
+  setPlayCompletionSound: (value) => set({ playCompletionSound: value }),
+
+  // Dev
+  isDev: false,
+  setIsDev: (value) => set({ isDev: value })
 }))

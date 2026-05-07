@@ -15,6 +15,7 @@ export interface VideoPlayerProps {
   onTimeUpdate?: (currentTime: number, duration: number) => void
   className?: string
   compact?: boolean
+  assetId?: string
 }
 
 export function VideoPlayer({
@@ -25,7 +26,8 @@ export function VideoPlayer({
   onScreenshot,
   onTimeUpdate,
   className,
-  compact = false
+  compact = false,
+  assetId
 }: VideoPlayerProps): JSX.Element {
   const videoRef = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -41,6 +43,7 @@ export function VideoPlayer({
   const [derivedPoster, setDerivedPoster] = useState<string | undefined>(poster)
   const [previewTime, setPreviewTime] = useState<number | null>(null)
   const [previewPosition, setPreviewPosition] = useState(0)
+  const [resolvedSrc, setResolvedSrc] = useState(src)
   const controlsTimer = useRef<number | null>(null)
   const { addToast } = useAppStore()
   const { activeProjectId } = useProjectStore()
@@ -50,6 +53,35 @@ export function VideoPlayer({
   useEffect(() => {
     setDerivedPoster(poster)
   }, [poster, src])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadAsset = async () => {
+      if (!window.manthan || !assetId || src.startsWith('data:')) {
+        setResolvedSrc(src)
+        return
+      }
+
+      try {
+        const base64 = await window.manthan.readAsset(assetId)
+        if (!cancelled && base64) {
+          setResolvedSrc(`data:${_mimeType || 'video/mp4'};base64,${base64}`)
+        } else {
+          setResolvedSrc(src)
+        }
+      } catch (error) {
+        console.error('[VideoPlayer] Failed to resolve asset:', error)
+        setResolvedSrc(src)
+      }
+    }
+
+    void loadAsset()
+
+    return () => {
+      cancelled = true
+    }
+  }, [assetId, _mimeType, src])
 
   const resetControlsTimer = useCallback(() => {
     if (controlsTimer.current) {
@@ -287,9 +319,9 @@ export function VideoPlayer({
         className={cn('relative h-full w-full overflow-hidden bg-black', className)}
       >
         <video
-          key={src}
+          key={resolvedSrc}
           ref={videoRef}
-          src={src}
+          src={resolvedSrc}
           poster={resolvedPoster}
           muted
           loop
@@ -302,7 +334,6 @@ export function VideoPlayer({
             void event.currentTarget.play().catch(() => undefined)
             setIsPlaying(true)
           }}
-          onMouseMove={handleCompactMouseMove}
           onMouseLeave={(event) => {
             event.currentTarget.pause()
             event.currentTarget.currentTime = 0
@@ -338,9 +369,9 @@ export function VideoPlayer({
       )}
     >
       <video
-        key={src}
+        key={resolvedSrc}
         ref={videoRef}
-        src={src}
+        src={resolvedSrc}
         poster={resolvedPoster}
         playsInline
         preload="metadata"

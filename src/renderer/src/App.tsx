@@ -16,6 +16,18 @@ import type {
 import { queueJobToGenerationJob } from './lib/enqueue-generation'
 import { useAppStore } from './stores/app-store'
 
+function isProtectedGoogleMediaUri(uri?: string): boolean {
+  return Boolean(uri?.includes('generativelanguage.googleapis.com/download/'))
+}
+
+function toAssetUri(path?: string): string | undefined {
+  return path ? `asset:///${path.replace(/\\/g, '/')}` : undefined
+}
+
+function canPlayFromLocalAsset(type: string): boolean {
+  return type === 'video' || type === 'audio'
+}
+
 function playCompletionChime(): void {
   const AudioContextCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
   if (!AudioContextCtor) return
@@ -43,12 +55,15 @@ function App(): JSX.Element {
   const { addJob, updateJob } = useGenerationStore()
   const { loadEnabledModels } = useModelStore()
   const { initialize: initializeQueue } = useQueueStore()
-  const { addToast, setHistoryHasUpdates, setPlayCompletionSound } = useAppStore()
+  const { addToast, setHistoryHasUpdates, setPlayCompletionSound, setIsDev } = useAppStore()
 
   useEffect(() => {
     void Promise.all([fetchProviders(), loadEnabledModels(), initializeQueue()])
     void window.manthan?.getPreferences().then((preferences) => {
       setPlayCompletionSound(Boolean(preferences.playCompletionSound ?? true))
+    })
+    void window.manthan?.isDev().then((dev) => {
+      setIsDev(dev)
     })
 
     if (typeof window !== 'undefined' && window.manthan) {
@@ -61,9 +76,12 @@ function App(): JSX.Element {
 
       const unsubComplete = window.manthan.onQueueJobComplete(
         async (payload: QueueJobCompletePayload) => {
+          const localAssetUri = canPlayFromLocalAsset(payload.result.type)
+            ? toAssetUri(payload.result.assetPath)
+            : undefined
           const base64Data =
             payload.result.data ||
-            (payload.result.assetId
+            (!localAssetUri && payload.result.assetId
               ? await window.manthan.readAsset(payload.result.assetId)
               : null) ||
             ''
@@ -75,9 +93,10 @@ function App(): JSX.Element {
             completedAt: payload.job.completed_at ?? Date.now(),
             result: {
               type: payload.job.type,
-              data: base64Data,
+              data: localAssetUri ? '' : base64Data,
               mimeType: payload.result.mimeType || 'application/octet-stream',
-              uri: payload.result.uri
+              uri: localAssetUri ?? (isProtectedGoogleMediaUri(payload.result.uri) ? undefined : payload.result.uri),
+              assetId: payload.result.assetId
             }
           }
 

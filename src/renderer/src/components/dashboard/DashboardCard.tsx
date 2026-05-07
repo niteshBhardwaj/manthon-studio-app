@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { VideoPlayer } from '../player/VideoPlayer'
+import { AudioPlayer } from '../player/AudioPlayer'
 import { VideoLightbox } from '../player/VideoLightbox'
 import type { DashboardFeedItem } from '../../hooks/useDashboardFeed'
 import type { GenerationJob } from '../../stores/generation-store'
@@ -72,11 +73,12 @@ export function dashboardItemToGenerationJob(item: DashboardFeedItem): Generatio
     completedAt: item.generation.completed_at ?? undefined,
     result: item.previewSrc
       ? {
-          type: item.type,
-          data: '',
-          mimeType: item.asset?.mime_type ?? 'video/mp4',
-          uri: item.previewSrc
-        }
+        type: item.type,
+        data: '',
+        mimeType: item.asset?.mime_type ?? 'video/mp4',
+        uri: item.previewSrc,
+        assetId: item.asset?.id ?? item.metadata.resultAssetId ?? undefined
+      }
       : undefined
   }
 }
@@ -98,22 +100,48 @@ function DashboardVideoSurface({
   autoPlay?: boolean
   className?: string
 }): JSX.Element {
+  const assetId = item.asset?.id ?? item.metadata.resultAssetId ?? undefined
+
+  return (
+    <VideoPlayer
+      src={item.previewSrc ?? ''}
+      assetId={assetId}
+      mimeType={item.asset?.mime_type}
+      poster={item.thumbnailSrc ?? undefined}
+      compact={compact}
+      autoPlay={autoPlay}
+      className={className}
+    />
+  )
+}
+
+function DashboardAudioSurface({
+  item,
+  compact = false,
+  autoPlay = false,
+  className
+}: {
+  item: DashboardFeedItem
+  compact?: boolean
+  autoPlay?: boolean
+  className?: string
+}): JSX.Element {
   const assetId = item.asset?.id ?? item.metadata.resultAssetId ?? null
   const [resolvedSrc, setResolvedSrc] = useState(item.previewSrc)
 
   useEffect(() => {
     let cancelled = false
 
-    const loadVideo = async () => {
+    const loadAudio = async () => {
       if (!window.manthan || !assetId) return
       const base64 = await window.manthan.readAsset(assetId)
       if (!cancelled && base64) {
-        setResolvedSrc(`data:${item.asset?.mime_type ?? 'video/mp4'};base64,${base64}`)
+        setResolvedSrc(`data:${item.asset?.mime_type ?? 'audio/mpeg'};base64,${base64}`)
       }
     }
 
     setResolvedSrc(item.previewSrc)
-    void loadVideo()
+    void loadAudio()
 
     return () => {
       cancelled = true
@@ -121,10 +149,9 @@ function DashboardVideoSurface({
   }, [assetId, item.asset?.mime_type, item.previewSrc])
 
   return (
-    <VideoPlayer
+    <AudioPlayer
       src={resolvedSrc ?? ''}
       mimeType={item.asset?.mime_type}
-      poster={item.thumbnailSrc ?? undefined}
       compact={compact}
       autoPlay={autoPlay}
       className={className}
@@ -182,10 +209,7 @@ function FeedItemModal({
                   className="max-h-[72vh] w-full object-contain"
                 />
               ) : (
-                <div className="flex flex-col items-center gap-6 py-12">
-                  <Music className="h-24 w-24 text-text-muted/60" />
-                  <audio controls src={item.previewSrc ?? ''} className="w-80" />
-                </div>
+                <DashboardAudioSurface item={item} autoPlay className="w-full max-w-2xl" />
               )}
             </div>
 
@@ -260,9 +284,7 @@ export function DashboardCard({
               className="h-full w-full object-cover"
             />
           ) : (
-            <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.14),transparent_45%),linear-gradient(180deg,rgba(9,13,20,0.82),rgba(9,13,20,0.95))]">
-              <Music className="h-8 w-8 text-emerald-400" />
-            </div>
+            <DashboardAudioSurface item={item} compact className="h-full w-full" />
           )}
 
           {isGenerating ? (

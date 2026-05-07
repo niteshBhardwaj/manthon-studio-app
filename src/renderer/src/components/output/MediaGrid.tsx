@@ -17,6 +17,7 @@ import { useAppStore } from '../../stores/app-store'
 import { cn } from '../../lib/utils'
 import { Tilt } from '../motion-primitives/tilt'
 import { VideoPlayer } from '../player/VideoPlayer'
+import { AudioPlayer } from '../player/AudioPlayer'
 import { VideoLightbox } from '../player/VideoLightbox'
 
 function formatJobConfig(job: GenerationJob): string {
@@ -33,7 +34,9 @@ function formatJobConfig(job: GenerationJob): string {
 
 function getJobSrc(job: GenerationJob): string {
   if (!job.result) return ''
-  return job.result.uri || `data:${job.result.mimeType};base64,${job.result.data}`
+  if (job.result.data) return `data:${job.result.mimeType};base64,${job.result.data}`
+  if (job.result.uri?.includes('generativelanguage.googleapis.com/download/')) return ''
+  return job.result.uri || ''
 }
 
 function formatElapsed(startedAt: number, now: number): string {
@@ -98,6 +101,54 @@ function ImageLightbox({
         </motion.div>
       ) : null}
     </AnimatePresence>
+  )
+}
+
+function MediaAudioSurface({
+  job,
+  compact = false,
+  autoPlay = false,
+  className
+}: {
+  job: GenerationJob
+  compact?: boolean
+  autoPlay?: boolean
+  className?: string
+}): JSX.Element {
+  const [resolvedSrc, setResolvedSrc] = useState<string>(getJobSrc(job))
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadAudioData = async () => {
+      if (!window.manthan || !job.result?.assetId || job.result.data) return
+
+      try {
+        const base64 = await window.manthan.readAsset(job.result.assetId)
+        if (!cancelled && base64) {
+          setResolvedSrc(`data:${job.result.mimeType};base64,${base64}`)
+        }
+      } catch (error) {
+        console.error('[MediaGrid] Failed to read audio asset:', error)
+      }
+    }
+
+    setResolvedSrc(getJobSrc(job))
+    void loadAudioData()
+
+    return () => {
+      cancelled = true
+    }
+  }, [job.result?.assetId, job.result?.data, job.result?.mimeType])
+
+  return (
+    <AudioPlayer
+      src={resolvedSrc}
+      mimeType={job.result?.mimeType}
+      compact={compact}
+      autoPlay={autoPlay}
+      className={className}
+    />
   )
 }
 
@@ -218,21 +269,13 @@ function MediaCard({ job }: { job: GenerationJob }): JSX.Element {
                     {job.type === 'video' ? (
                       <VideoPlayer
                         src={getJobSrc(job)}
+                        assetId={job.result.assetId}
                         mimeType={job.result.mimeType}
                         compact
                         className="h-full w-full"
                       />
                     ) : job.type === 'audio' ? (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.16),transparent_42%),linear-gradient(180deg,rgba(9,13,20,0.82),rgba(9,13,20,0.94))]">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10">
-                          <Music className="h-6 w-6 text-emerald-400" />
-                        </div>
-                        <audio
-                          controls
-                          src={`data:${job.result.mimeType};base64,${job.result.data}`}
-                          style={{ width: '82%', height: '34px' }}
-                        />
-                      </div>
+                      <MediaAudioSurface job={job} compact className="h-full w-full" />
                     ) : (
                       <img
                         src={`data:${job.result.mimeType};base64,${job.result.data}`}

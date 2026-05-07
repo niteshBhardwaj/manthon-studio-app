@@ -6,6 +6,7 @@ import type {
   QueueJobProgressPayload,
   QueueJobResult
 } from './types'
+import { logger } from '../logger'
 
 interface ProcessJobOptions {
   signal: AbortSignal
@@ -19,6 +20,7 @@ const DEFAULT_TIMEOUT_MS = 2 * 60 * 1000
 
 export class JobProcessor {
   async processJob(job: QueueJob, options: ProcessJobOptions): Promise<QueueJobResult> {
+    logger.debug('Queue', `Processing job: ${job.id} (${job.type})`)
     switch (job.type) {
       case 'video':
         return this.processVideoJob(job, options)
@@ -48,6 +50,8 @@ export class JobProcessor {
       options.signal
     )
 
+    logger.debug('Queue', `Video generation operation started: ${operation.id}`, { operation })
+
     if (operation.status === 'failed') {
       throw new Error(operation.error || 'Video generation failed')
     }
@@ -69,9 +73,11 @@ export class JobProcessor {
       const pollResult = await this.withTimeout(
         provider.pollOperation(operation.id),
         DEFAULT_TIMEOUT_MS,
-        `Video polling for ${job.id}`,
+        `Video poll for ${job.id}`,
         options.signal
       )
+
+      logger.debug('Queue', `Video polling result for ${job.id}: ${pollResult.status}`, { pollResult })
 
       if (pollResult.status === 'completed' && pollResult.result) {
         options.onProgress({ jobId: job.id, progress: 100, status: 'running' })

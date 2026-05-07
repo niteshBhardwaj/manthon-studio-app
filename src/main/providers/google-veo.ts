@@ -14,6 +14,7 @@ import {
   GenerationOperation,
   GenerationStatus
 } from './base'
+import { logger } from '../logger'
 
 export class GoogleVeoProvider implements MediaProvider {
   id = 'google-veo'
@@ -49,6 +50,7 @@ export class GoogleVeoProvider implements MediaProvider {
   }
 
   private client: GoogleGenAI | null = null
+  private apiKey: string | null = null
   private operations: Map<string, unknown> = new Map()
 
   isInitialized(): boolean {
@@ -57,6 +59,8 @@ export class GoogleVeoProvider implements MediaProvider {
 
   async initialize(apiKey: string): Promise<void> {
     this.client = new GoogleGenAI({ apiKey })
+    this.apiKey = apiKey
+    logger.info('Provider', 'Google Veo 3.1 initialized with API key')
   }
 
   async testConnection(): Promise<ConnectionStatus> {
@@ -81,6 +85,15 @@ export class GoogleVeoProvider implements MediaProvider {
 
   async generateVideo(params: VideoGenParams): Promise<GenerationOperation> {
     if (!this.client) throw new Error('Provider not initialized')
+
+    logger.debug('Provider', 'generateVideo() called', {
+      model: params.model || this.config.defaultModel,
+      prompt: params.prompt.length > 100 ? params.prompt.substring(0, 100) + '...' : params.prompt,
+      aspectRatio: params.aspectRatio,
+      resolution: params.resolution,
+      hasImage: !!params.image,
+      hasVideo: !!params.video
+    })
 
     const operationId = `veo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     const model = params.model || this.config.defaultModel
@@ -158,11 +171,17 @@ export class GoogleVeoProvider implements MediaProvider {
       this.operations.set(operationId, rawOperation)
       operation._operationName = (rawOperation as { name?: string }).name
 
+      logger.info('Provider', 'generateVideo() operation started', {
+        operationId,
+        operationName: operation._operationName
+      })
+
       return operation
     } catch (error: unknown) {
       operation.status = 'failed'
       operation.error = error instanceof Error ? error.message : 'Generation failed'
       operation.completedAt = Date.now()
+      logger.error('Provider', 'generateVideo() failed', { error: operation.error })
       return operation
     }
   }
@@ -194,11 +213,34 @@ export class GoogleVeoProvider implements MediaProvider {
 
       const done = (updated as { done?: boolean }).done
       const response = (
-        updated as { response?: { generatedVideos?: Array<{ video?: { uri?: string } }> } }
+        updated as {
+          response?: {
+            generatedVideos?: Array<{
+              video?: { uri?: string; videoBytes?: string; mimeType?: string }
+            }>
+          }
+        }
       ).response
 
       if (done && response?.generatedVideos?.[0]) {
         const video = response.generatedVideos[0].video
+        let data = video?.videoBytes || ''
+        let mimeType = video?.mimeType || 'video/mp4'
+
+        if (!data && video?.uri) {
+          const downloaded = await this.downloadGeneratedVideo(video.uri)
+          data = downloaded.data
+          mimeType = downloaded.mimeType
+        }
+
+        if (!data) {
+          throw new Error('Generated video did not include downloadable media data')
+        }
+
+        logger.info('Provider', 'pollOperation() result - completed', {
+          operationId,
+          videoUri: video?.uri
+        })
 
         return {
           id: operationId,
@@ -210,12 +252,14 @@ export class GoogleVeoProvider implements MediaProvider {
           completedAt: Date.now(),
           result: {
             type: 'video',
-            data: '',
-            mimeType: 'video/mp4',
-            uri: video?.uri || ''
+            data,
+            mimeType,
+            metadata: video?.uri ? { sourceUri: video.uri } : undefined
           }
         }
       }
+
+      logger.debug('Provider', 'pollOperation() result - generating', { operationId })
 
       return {
         id: operationId,
@@ -240,5 +284,28 @@ export class GoogleVeoProvider implements MediaProvider {
 
   async cancelOperation(operationId: string): Promise<void> {
     this.operations.delete(operationId)
+  }
+
+  private async downloadGeneratedVideo(uri: string): Promise<{ data: string; mimeType: string }> {
+    if (!this.apiKey) {
+      throw new Error('Google Veo API key is not available for video download')
+    }
+
+    const downloadUrl = new URL(uri)
+    downloadUrl.searchParams.set('key', this.apiKey)
+
+    const response = await fetch(downloadUrl.toString())
+
+    if (!response.ok) {
+      throw new Error(`Failed to download generated video: ${response.status}`)
+    }
+
+    const arrayBuffer = await response.arrayBuffer()
+    const mimeType = response.headers.get('content-type')?.split(';')[0]?.trim() || 'video/mp4'
+
+    return {
+      data: Buffer.from(arrayBuffer).toString('base64'),
+      mimeType
+    }
   }
 }

@@ -13,6 +13,7 @@ import {
   ImageGenParams,
   GenerationResult
 } from './base'
+import { logger } from '../logger'
 
 export class GoogleImagenProvider implements MediaProvider {
   id = 'google-imagen'
@@ -56,6 +57,7 @@ export class GoogleImagenProvider implements MediaProvider {
 
   async initialize(apiKey: string): Promise<void> {
     this.client = new GoogleGenAI({ apiKey })
+    logger.info('Provider', 'Google Nano Banana initialized')
   }
 
   async testConnection(): Promise<ConnectionStatus> {
@@ -88,6 +90,13 @@ export class GoogleImagenProvider implements MediaProvider {
     if (!this.client) throw new Error('Provider not initialized')
 
     const model = params.model || this.config.defaultModel
+
+    logger.debug('Provider', 'generateImage() called', {
+      model,
+      prompt: params.prompt.length > 100 ? params.prompt.substring(0, 100) + '...' : params.prompt,
+      aspectRatio: params.aspectRatio,
+      resolution: params.resolution
+    })
 
     try {
       const contents: any[] = [{ text: params.prompt }]
@@ -161,6 +170,11 @@ export class GoogleImagenProvider implements MediaProvider {
 
       if (images.length > 0) {
         const finalImage = images[images.length - 1]
+        logger.info('Provider', 'generateImage() completed', {
+          partsCount: parts.length,
+          imagesCount: images.length,
+          finalSize: Math.round(finalImage.data.length * 0.75)
+        })
         return {
           type: 'image',
           data: finalImage.data,

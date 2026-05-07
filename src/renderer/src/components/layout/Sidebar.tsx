@@ -3,7 +3,7 @@
 // Navigation with cinematic minimal design
 // ============================================================
 
-import { Plus, Clock, FolderOpen, Sparkles, Settings, ListOrdered } from 'lucide-react'
+import { Plus, Clock, FolderOpen, Sparkles, Settings, ListOrdered, Database } from 'lucide-react'
 import { type JSX } from 'react'
 import { useAppStore } from '../../stores/app-store'
 import { useQueueStore } from '../../stores/queue-store'
@@ -15,11 +15,12 @@ const navItems = [
   { id: 'queue' as const, icon: ListOrdered, label: 'Queue' },
   { id: 'history' as const, icon: Clock, label: 'History' },
   { id: 'assets' as const, icon: FolderOpen, label: 'Assets' },
-  { id: 'templates' as const, icon: Sparkles, label: 'Templates' }
+  { id: 'templates' as const, icon: Sparkles, label: 'Templates' },
+  { id: 'db-explorer' as const, icon: Database, label: 'DB Explorer', devOnly: true }
 ]
 
 export function Sidebar(): JSX.Element {
-  const { activeSidebarTab, setSidebarTab, openModal, historyHasUpdates } = useAppStore()
+  const { activeSidebarTab, setSidebarTab, openModal, historyHasUpdates, isDev } = useAppStore()
   const pendingCount = useQueueStore(
     (state) =>
       state.jobs.filter((job) => job.status === 'pending' || job.status === 'running').length
@@ -35,43 +36,45 @@ export function Sidebar(): JSX.Element {
           <AnimatedBackground
             defaultValue={activeSidebarTab}
             onValueChange={(value) =>
-              setSidebarTab(value as 'create' | 'queue' | 'history' | 'assets' | 'templates')
+              setSidebarTab(value as any)
             }
             className="rounded-full bg-accent/20"
             transition={{ type: 'spring', bounce: 0.2, duration: 0.4 }}
           >
-            {navItems.map((item) => {
-              const Icon = item.icon
-              const isActive = activeSidebarTab === item.id
+            {navItems
+              .filter((item) => !item.devOnly || isDev)
+              .map((item) => {
+                const Icon = item.icon
+                const isActive = activeSidebarTab === item.id
 
-              return (
-                <button
-                  key={item.id}
-                  data-id={item.id}
-                  type="button"
-                  className={cn(
-                    'relative z-10 flex w-full aspect-square items-center justify-center rounded-full transition-colors duration-200',
-                    isActive
-                      ? 'text-accent'
-                      : 'text-text-muted hover:text-text-secondary hover:bg-bg-hover/50'
-                  )}
-                  title={item.label}
-                >
-                  <Icon className="w-5 h-5" />
-                  {item.id === 'history' && historyHasUpdates && !isActive ? (
-                    <>
-                      <span className="absolute inset-1 rounded-full border border-emerald-400/50 animate-ping" />
-                      <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.7)]" />
-                    </>
-                  ) : null}
-                  {item.id === 'queue' && pendingCount > 0 ? (
-                    <span className="absolute right-1 top-1 min-w-4 rounded-full bg-accent px-1 text-[9px] font-semibold leading-4 text-white">
-                      {pendingCount > 9 ? '9+' : pendingCount}
-                    </span>
-                  ) : null}
-                </button>
-              )
-            })}
+                return (
+                  <button
+                    key={item.id}
+                    data-id={item.id}
+                    type="button"
+                    className={cn(
+                      'relative z-10 flex w-full aspect-square items-center justify-center rounded-full transition-colors duration-200',
+                      isActive
+                        ? 'text-accent'
+                        : 'text-text-muted hover:text-text-secondary hover:bg-bg-hover/50'
+                    )}
+                    title={item.label}
+                  >
+                    <Icon className="w-5 h-5" />
+                    {item.id === 'history' && historyHasUpdates && !isActive ? (
+                      <>
+                        <span className="absolute inset-1 rounded-full border border-emerald-400/50 animate-ping" />
+                        <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.7)]" />
+                      </>
+                    ) : null}
+                    {item.id === 'queue' && pendingCount > 0 ? (
+                      <span className="absolute right-1 top-1 min-w-4 rounded-full bg-accent px-1 text-[9px] font-semibold leading-4 text-white">
+                        {pendingCount > 9 ? '9+' : pendingCount}
+                      </span>
+                    ) : null}
+                  </button>
+                )
+              })}
           </AnimatedBackground>
         </nav>
 

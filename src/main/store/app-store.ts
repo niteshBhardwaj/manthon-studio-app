@@ -11,6 +11,7 @@ import { existsSync, readFileSync, renameSync } from 'fs'
 import { join } from 'path'
 import { app } from 'electron'
 import { randomUUID } from 'crypto'
+import { LogLevel, logger } from '../logger'
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -22,6 +23,7 @@ interface Preferences {
   defaultResolution: string
   enabledModels: string[]
   notificationsEnabled: boolean
+  logLevel: LogLevel
 }
 
 interface Template {
@@ -105,7 +107,8 @@ const DEFAULT_PREFERENCES: Preferences = {
   defaultAspectRatio: '16:9',
   defaultResolution: '1080p',
   enabledModels: MODEL_REGISTRY.map((model) => model.id),
-  notificationsEnabled: true
+  notificationsEnabled: true,
+  logLevel: (process.env.NODE_ENV === 'development' || !app.isPackaged) ? 'debug' : 'warn'
 }
 
 // ── JSON → SQLite Migration ─────────────────────────────────
@@ -119,11 +122,11 @@ function migrateFromJson(): void {
     'SELECT COUNT(*) as count FROM generations'
   )
   if (count && count.count > 0) {
-    console.log('[Migration] SQLite already has data, skipping JSON migration.')
+    logger.info('Migration', 'SQLite already has data, skipping JSON migration.')
     return
   }
 
-  console.log('[Migration] Migrating from manthan-app.json to SQLite...')
+  logger.info('Migration', 'Migrating from manthan-app.json to SQLite...')
 
   try {
     const raw = readFileSync(jsonPath, 'utf-8')
@@ -152,7 +155,7 @@ function migrateFromJson(): void {
           ]
         )
       }
-      console.log(`[Migration] Migrated ${history.length} history items.`)
+      logger.info('Migration', `Migrated ${history.length} history items.`)
 
       // Migrate preferences
       const prefs = data.preferences
@@ -163,7 +166,7 @@ function migrateFromJson(): void {
             JSON.stringify(value)
           ])
         }
-        console.log('[Migration] Migrated preferences.')
+        logger.info('Migration', 'Migrated preferences.')
       }
 
       // Migrate templates
@@ -176,15 +179,15 @@ function migrateFromJson(): void {
           [tmpl.id, tmpl.name, tmpl.prompt, tmpl.category, now]
         )
       }
-      console.log(`[Migration] Migrated ${templates.length} templates.`)
+      logger.info('Migration', `Migrated ${templates.length} templates.`)
     })
 
     // Rename old file
     const backupPath = jsonPath + '.bak'
     renameSync(jsonPath, backupPath)
-    console.log(`[Migration] Old JSON file renamed to ${backupPath}`)
+    logger.info('Migration', `Old JSON file renamed to ${backupPath}`)
   } catch (e) {
-    console.error('[Migration] Failed to migrate from JSON:', e)
+    logger.error('Migration', 'Failed to migrate from JSON:', e)
   }
 }
 
@@ -228,6 +231,12 @@ export const appStore = {
   initialize(): void {
     migrateFromJson()
     seedDefaults()
+
+    // Initialize logger level from preferences
+    const prefs = this.getPreferences()
+    if (prefs.logLevel) {
+      logger.setLevel(prefs.logLevel)
+    }
   },
 
   // ── History (generations table) ────────────────────────────

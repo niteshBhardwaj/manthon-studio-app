@@ -6,6 +6,7 @@ import { readdir, rm, stat } from 'fs/promises'
 import { promisify } from 'util'
 import { assetManager } from './asset-manager'
 import { databaseManager } from './db'
+import { logger } from '../logger'
 
 const execFileAsync = promisify(execFile)
 const RETENTION_POLICY_KEY = 'retentionPolicy'
@@ -186,7 +187,7 @@ class StorageManager {
         }
       }
     } catch (error) {
-      console.warn('[StorageManager] Failed to get system disk info:', error)
+      logger.warn('Storage', 'Failed to get system disk info:', error)
     }
 
     return {
@@ -209,6 +210,7 @@ class StorageManager {
     mkdirSync(this.cacheRoot, { recursive: true })
     mkdirSync(this.tempRoot, { recursive: true })
 
+    logger.info('Storage', `Cache cleanup complete: freed ${freedBytes} bytes`)
     return freedBytes
   }
 
@@ -328,7 +330,6 @@ class StorageManager {
         }
       }
     }
-
     return {
       deletedGenerations,
       deletedAssets,

@@ -6,6 +6,7 @@
 import { safeStorage } from 'electron'
 import { JsonStore } from './json-store'
 import { KEY_GROUPS, PROVIDER_GROUP_MAPPING } from '../../shared/model-registry'
+import { logger } from '../logger'
 
 interface KeyStoreSchema extends Record<string, unknown> {
   apiKeys: Record<string, string>
@@ -52,6 +53,7 @@ export const keyStore = {
     const keys = store.get('apiKeys')
     keys[provider] = encodeKey(apiKey)
     store.set('apiKeys', keys)
+    logger.info('App', `API key saved for provider: ${provider}`)
   },
 
   getApiKey(provider: string): string | null {
@@ -72,6 +74,7 @@ export const keyStore = {
     const keys = store.get('apiKeys')
     delete keys[provider]
     store.set('apiKeys', keys)
+    logger.info('App', `API key removed for provider: ${provider}`)
   },
 
   hasApiKey(provider: string): boolean {
@@ -98,6 +101,7 @@ export const keyStore = {
       keys[providerId] = groupKeys[group]
     })
     store.set('apiKeys', keys)
+    logger.info('App', `API key saved for group: ${group}`)
   },
 
   getGroupKey(group: string): string | null {
@@ -131,6 +135,7 @@ export const keyStore = {
     const groupKeys = store.get('groupKeys')
     delete groupKeys[group]
     store.set('groupKeys', groupKeys)
+    logger.info('App', `API key removed for group: ${group}`)
   },
 
   hasGroupKey(group: string): boolean {
@@ -148,6 +153,7 @@ export const keyStore = {
 
   setActiveProvider(provider: string | null): void {
     store.set('activeProvider', provider)
+    logger.info('App', `Active provider changed to: ${provider}`)
   },
 
   getActiveProvider(): string | null {

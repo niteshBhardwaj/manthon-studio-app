@@ -147,6 +147,15 @@ interface ManthanAPI {
   onQueueJobProgress: (callback: (payload: QueueJobProgressPayload) => void) => () => void
   onQueueJobComplete: (callback: (payload: QueueJobCompletePayload) => void) => () => void
   onQueueJobFailed: (callback: (payload: QueueJobFailedPayload) => void) => () => void
+
+  // ── Dev Tools ───────────────────────────────────────────
+  isDev: () => Promise<boolean>
+  getLogLevel: () => Promise<string>
+  setLogLevel: (level: string) => Promise<{ success: boolean }>
+  getDbTables: () => Promise<Array<{ name: string; row_count: number }>>
+  queryDb: (sql: string) => Promise<any[]>
+  getDbTableInfo: (table: string) => Promise<any[]>
+  getDbPath: () => Promise<string>
 }
 
 interface ProjectInfo {

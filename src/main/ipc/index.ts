@@ -3,10 +3,10 @@
 // All IPC communication between main and renderer processes
 // ============================================================
 
-import { ipcMain, dialog, shell } from 'electron'
+import { ipcMain, dialog, shell, app } from 'electron'
+import { is } from '@electron-toolkit/utils'
 import { writeFile, readFile, mkdir } from 'fs/promises'
 import { join } from 'path'
-import { app } from 'electron'
 import { providerRegistry } from '../providers/registry'
 import { keyStore } from '../store/key-store'
 import { appStore } from '../store/app-store'
@@ -15,10 +15,46 @@ import { projectManager } from '../store/project-manager'
 import { storageManager } from '../store/storage-manager'
 import type { EnqueueJobInput } from '../queue/types'
 import { queueManager } from '../queue/queue-manager'
+import { databaseManager } from '../store/db'
+import { logger } from '../logger'
+
+function summarizeArgs(args: any[]): any {
+  return args.map(arg => {
+    if (typeof arg === 'string' && arg.length > 200) return arg.substring(0, 200) + '...'
+    if (arg && typeof arg === 'object') {
+      const summary: any = {}
+      for (const key in arg) {
+        if (Object.prototype.hasOwnProperty.call(arg, key)) {
+          const val = arg[key]
+          if (typeof val === 'string' && val.length > 100) summary[key] = val.substring(0, 100) + '...'
+          else if (val && typeof val === 'object' && !Array.isArray(val)) summary[key] = '[Object]'
+          else if (Array.isArray(val)) summary[key] = `[Array(${val.length})]`
+          else summary[key] = val
+        }
+      }
+      return summary
+    }
+    return arg
+  })
+}
+
+function logIpcHandler(channel: string, handler: (...args: any[]) => any): void {
+  ipcMain.handle(channel, async (event, ...args) => {
+    logger.debug('IPC', `→ ${channel}`, summarizeArgs(args))
+    try {
+      const result = await handler(event, ...args)
+      logger.debug('IPC', `← ${channel} OK`)
+      return result
+    } catch (error) {
+      logger.error('IPC', `← ${channel} FAILED`, { error })
+      throw error
+    }
+  })
+}
 
 export function registerIpcHandlers(): void {
   // ── API Key Management ──────────────────────────────────
-  ipcMain.handle('api-key:save', async (_event, provider: string, apiKey: string) => {
+  logIpcHandler('api-key:save', async (_event, provider: string, apiKey: string) => {
     try {
       keyStore.saveApiKey(provider, apiKey)
       const group = keyStore.getProviderGroupMapping()[provider]
@@ -33,7 +69,7 @@ export function registerIpcHandlers(): void {
     }
   })
 
-  ipcMain.handle('api-key:test', async (_event, provider: string, apiKey: string) => {
+  logIpcHandler('api-key:test', async (_event, provider: string, apiKey: string) => {
     try {
       // Temporarily initialize with the test key
       const prov = providerRegistry.get(provider)
@@ -49,7 +85,7 @@ export function registerIpcHandlers(): void {
     }
   })
 
-  ipcMain.handle('api-key:status', async (_event, provider: string) => {
+  logIpcHandler('api-key:status', async (_event, provider: string) => {
     const hasKey = keyStore.hasApiKey(provider)
     if (!hasKey) return { connected: false, message: 'No API key configured' }
 
@@ -61,12 +97,12 @@ export function registerIpcHandlers(): void {
     return prov.testConnection()
   })
 
-  ipcMain.handle('api-key:remove', async (_event, provider: string) => {
+  logIpcHandler('api-key:remove', async (_event, provider: string) => {
     keyStore.removeApiKey(provider)
     return { success: true }
   })
 
-  ipcMain.handle('api-key:save-group', async (_event, group: string, apiKey: string) => {
+  logIpcHandler('api-key:save-group', async (_event, group: string, apiKey: string) => {
     try {
       keyStore.saveGroupKey(group, apiKey)
       await providerRegistry.initializeGroup(group, apiKey)
@@ -76,7 +112,7 @@ export function registerIpcHandlers(): void {
     }
   })
 
-  ipcMain.handle('api-key:test-group', async (_event, group: string, apiKey: string) => {
+  logIpcHandler('api-key:test-group', async (_event, group: string, apiKey: string) => {
     try {
       const mapping = providerRegistry.getGroupMapping()
       const providerId = Object.keys(mapping).find((id) => mapping[id] === group)
@@ -101,91 +137,91 @@ export function registerIpcHandlers(): void {
   })
 
   // ── Provider Management ─────────────────────────────────
-  ipcMain.handle('provider:list', async () => {
+  logIpcHandler('provider:list', async () => {
     return providerRegistry.getProviderList()
   })
 
-  ipcMain.handle('provider:set-active', async (_event, providerId: string) => {
+  logIpcHandler('provider:set-active', async (_event, providerId: string) => {
     providerRegistry.setActive(providerId)
     keyStore.setActiveProvider(providerId)
     return { success: true }
   })
 
-  ipcMain.handle('provider:get-active', async () => {
+  logIpcHandler('provider:get-active', async () => {
     return providerRegistry.getActiveId()
   })
 
-  ipcMain.handle('provider:get-config', async (_event, providerId: string) => {
+  logIpcHandler('provider:get-config', async (_event, providerId: string) => {
     const provider = providerRegistry.get(providerId)
     if (!provider) return null
     return provider.config
   })
 
-  ipcMain.handle('models:get-enabled', async () => {
+  logIpcHandler('models:get-enabled', async () => {
     return appStore.getEnabledModels()
   })
 
-  ipcMain.handle('models:set-enabled', async (_event, ids: string[]) => {
+  logIpcHandler('models:set-enabled', async (_event, ids: string[]) => {
     appStore.setEnabledModels(ids)
     return { success: true }
   })
 
   // ── Generation ──────────────────────────────────────────
-  ipcMain.handle('gen:video', async (_event, job: EnqueueJobInput) => {
+  logIpcHandler('gen:video', async (_event, job: EnqueueJobInput) => {
     return queueManager.enqueue(job)
   })
 
-  ipcMain.handle('gen:image', async (_event, job: EnqueueJobInput) => {
+  logIpcHandler('gen:image', async (_event, job: EnqueueJobInput) => {
     return queueManager.enqueue(job)
   })
 
-  ipcMain.handle('gen:audio', async (_event, job: EnqueueJobInput) => {
+  logIpcHandler('gen:audio', async (_event, job: EnqueueJobInput) => {
     return queueManager.enqueue(job)
   })
 
-  ipcMain.handle('queue:list', async () => {
+  logIpcHandler('queue:list', async () => {
     return queueManager.getQueueState()
   })
 
-  ipcMain.handle('queue:pause', async () => {
+  logIpcHandler('queue:pause', async () => {
     return queueManager.pause()
   })
 
-  ipcMain.handle('queue:resume', async () => {
+  logIpcHandler('queue:resume', async () => {
     return queueManager.resume()
   })
 
-  ipcMain.handle('queue:cancel', async (_event, id: string) => {
+  logIpcHandler('queue:cancel', async (_event, id: string) => {
     return queueManager.cancelJob(id)
   })
 
-  ipcMain.handle('queue:retry', async (_event, id: string) => {
+  logIpcHandler('queue:retry', async (_event, id: string) => {
     return queueManager.retryJob(id)
   })
 
-  ipcMain.handle('queue:reorder', async (_event, id: string, newPriority: number) => {
+  logIpcHandler('queue:reorder', async (_event, id: string, newPriority: number) => {
     return queueManager.reorderJob(id, newPriority)
   })
 
-  ipcMain.handle('queue:clear-completed', async () => {
+  logIpcHandler('queue:clear-completed', async () => {
     return queueManager.clearCompleted()
   })
 
-  ipcMain.handle('queue:delete', async (_event, id: string) => {
+  logIpcHandler('queue:delete', async (_event, id: string) => {
     return queueManager.deleteJob(id)
   })
 
   // ── History ─────────────────────────────────────────────
-  ipcMain.handle('history:get', async () => {
+  logIpcHandler('history:get', async () => {
     return appStore.getHistory()
   })
 
-  ipcMain.handle('history:clear', async () => {
+  logIpcHandler('history:clear', async () => {
     appStore.clearHistory()
     return { success: true }
   })
 
-  ipcMain.handle(
+  logIpcHandler(
     'generation:list',
     async (
       _event,
@@ -200,31 +236,31 @@ export function registerIpcHandlers(): void {
     }
   )
 
-  ipcMain.handle('generation:star', async (_event, id: string) => {
+  logIpcHandler('generation:star', async (_event, id: string) => {
     return appStore.toggleGenerationStar(id)
   })
 
-  ipcMain.handle('generation:delete', async (_event, id: string) => {
+  logIpcHandler('generation:delete', async (_event, id: string) => {
     return appStore.deleteGeneration(id)
   })
 
   // ── Templates ───────────────────────────────────────────
-  ipcMain.handle('templates:get', async () => {
+  logIpcHandler('templates:get', async () => {
     return appStore.getTemplates()
   })
 
   // ── Preferences ─────────────────────────────────────────
-  ipcMain.handle('preferences:get', async () => {
+  logIpcHandler('preferences:get', async () => {
     return appStore.getPreferences()
   })
 
-  ipcMain.handle('preferences:set', async (_event, key: string, value: unknown) => {
+  logIpcHandler('preferences:set', async (_event, key: string, value: unknown) => {
     appStore.setPreference(key, value)
     return { success: true }
   })
 
   // ── File System ─────────────────────────────────────────
-  ipcMain.handle('file:save', async (_event, data: string, filename: string) => {
+  logIpcHandler('file:save', async (_event, data: string, filename: string) => {
     const mediaDir = join(app.getPath('userData'), 'media')
     await mkdir(mediaDir, { recursive: true })
 
@@ -235,7 +271,7 @@ export function registerIpcHandlers(): void {
     return { path: filePath }
   })
 
-  ipcMain.handle('file:open', async () => {
+  logIpcHandler('file:open', async () => {
     const result = await dialog.showOpenDialog({
       properties: ['openFile'],
       filters: [
@@ -267,13 +303,13 @@ export function registerIpcHandlers(): void {
     }
   })
 
-  ipcMain.handle('file:read', async (_event, path: string) => {
+  logIpcHandler('file:read', async (_event, path: string) => {
     const data = await readFile(path)
     return data.toString('base64')
   })
 
   // ── Assets ───────────────────────────────────────────────
-  ipcMain.handle(
+  logIpcHandler(
     'asset:save',
     async (
       _event,
@@ -290,7 +326,7 @@ export function registerIpcHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  logIpcHandler(
     'asset:list',
     async (
       _event,
@@ -306,19 +342,19 @@ export function registerIpcHandlers(): void {
     }
   )
 
-  ipcMain.handle('asset:get', async (_event, id: string) => {
+  logIpcHandler('asset:get', async (_event, id: string) => {
     return assetManager.getAsset(id)
   })
 
-  ipcMain.handle('asset:read', async (_event, id: string) => {
+  logIpcHandler('asset:read', async (_event, id: string) => {
     return assetManager.readAssetBase64(id)
   })
 
-  ipcMain.handle('asset:delete', async (_event, id: string) => {
+  logIpcHandler('asset:delete', async (_event, id: string) => {
     return assetManager.deleteAsset(id)
   })
 
-  ipcMain.handle('asset:import', async (_event, projectId?: string) => {
+  logIpcHandler('asset:import', async (_event, projectId?: string) => {
     const result = await dialog.showOpenDialog({
       properties: ['openFile', 'multiSelections'],
       filters: [
@@ -337,13 +373,13 @@ export function registerIpcHandlers(): void {
         const asset = await assetManager.importFromFile(projectId ?? 'default', filePath)
         imported.push(asset)
       } catch (e) {
-        console.warn(`[IPC] Failed to import ${filePath}:`, e)
+        logger.warn('App', `Failed to import ${filePath}`, e)
       }
     }
     return imported
   })
 
-  ipcMain.handle('asset:import-paths', async (_event, projectId: string | undefined, paths: string[]) => {
+  logIpcHandler('asset:import-paths', async (_event, projectId: string | undefined, paths: string[]) => {
     const imported: Array<Awaited<ReturnType<typeof assetManager.importFromFile>>> = []
 
     for (const filePath of paths) {
@@ -351,14 +387,14 @@ export function registerIpcHandlers(): void {
         const asset = await assetManager.importFromFile(projectId ?? 'default', filePath)
         imported.push(asset)
       } catch (e) {
-        console.warn(`[IPC] Failed to import dropped asset ${filePath}:`, e)
+        logger.warn('App', `Failed to import dropped asset ${filePath}`, e)
       }
     }
 
     return imported
   })
 
-  ipcMain.handle('asset:export', async (_event, ids: string[]) => {
+  logIpcHandler('asset:export', async (_event, ids: string[]) => {
     if (!ids || ids.length === 0) return { success: false, error: 'No assets selected' }
     
     // For single file, use Save dialog
@@ -415,48 +451,48 @@ export function registerIpcHandlers(): void {
     return { success: true, count: successCount }
   })
 
-  ipcMain.handle('asset:stats', async () => {
+  logIpcHandler('asset:stats', async () => {
     return storageManager.getStorageBreakdown()
   })
 
-  ipcMain.handle('asset:cleanup-cache', async () => {
+  logIpcHandler('asset:cleanup-cache', async () => {
     return storageManager.cleanupCache()
   })
 
-  ipcMain.handle('storage:open-folder', async () => {
+  logIpcHandler('storage:open-folder', async () => {
     shell.openPath(app.getPath('userData'))
   })
 
-  ipcMain.handle('storage:breakdown', async () => {
+  logIpcHandler('storage:breakdown', async () => {
     return storageManager.getStorageBreakdown()
   })
 
-  ipcMain.handle('storage:disk-info', async () => {
+  logIpcHandler('storage:disk-info', async () => {
     return storageManager.getSystemDiskInfo()
   })
 
-  ipcMain.handle('storage:cleanup-cache', async () => {
+  logIpcHandler('storage:cleanup-cache', async () => {
     return storageManager.cleanupCache()
   })
 
-  ipcMain.handle('storage:get-policy', async () => {
+  logIpcHandler('storage:get-policy', async () => {
     return storageManager.getRetentionPolicy()
   })
 
-  ipcMain.handle('storage:set-policy', async (_event, policy) => {
+  logIpcHandler('storage:set-policy', async (_event, policy) => {
     return storageManager.setRetentionPolicy(policy)
   })
 
-  ipcMain.handle('storage:apply-policy', async (_event, policy) => {
+  logIpcHandler('storage:apply-policy', async (_event, policy) => {
     return storageManager.applyRetentionPolicy(policy)
   })
 
   // ── Projects ─────────────────────────────────────────────
-  ipcMain.handle('project:list', async () => {
+  logIpcHandler('project:list', async () => {
     return projectManager.listProjects()
   })
 
-  ipcMain.handle(
+  logIpcHandler(
     'project:create',
     async (
       _event,
@@ -466,7 +502,7 @@ export function registerIpcHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  logIpcHandler(
     'project:update',
     async (
       _event,
@@ -477,14 +513,78 @@ export function registerIpcHandlers(): void {
     }
   )
 
-  ipcMain.handle('project:delete', async (_event, id: string) => {
+  logIpcHandler('project:delete', async (_event, id: string) => {
     projectManager.deleteProject(id)
     return { success: true }
   })
 
-  ipcMain.handle('project:colors', async () => {
+  logIpcHandler('project:colors', async () => {
     return projectManager.getColors()
   })
+
+  // ── Dev Tools (Dev Mode Only) ───────────────────────────
+  const devEnabled = is.dev || !app.isPackaged
+  logger.info('App', `Dev mode handlers: ${devEnabled ? 'ENABLED' : 'DISABLED'}`)
+  
+  if (devEnabled) {
+    logIpcHandler('dev:is-dev', () => true)
+    
+    logIpcHandler('dev:get-log-level', () => logger.getLevel())
+    
+    logIpcHandler('dev:set-log-level', (_e, level) => {
+      logger.setLevel(level)
+      appStore.setPreference('logLevel', level)
+      return { success: true }
+    })
+
+    logIpcHandler('dev:db-tables', () => {
+      logger.debug('DB', 'Fetching tables for explorer')
+      const tables = databaseManager.query<{ name: string }>(
+        `SELECT name FROM sqlite_master 
+         WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_migrations'
+         ORDER BY name`
+      )
+      
+      logger.debug('DB', `Found ${tables.length} tables`)
+      
+      return tables.map(t => {
+        try {
+          const sql = `SELECT COUNT(*) as count FROM "${t.name}"`
+          logger.debug('DB', `Running count query: ${sql}`)
+          const result = databaseManager.queryOne<{ count: number }>(sql)
+          return {
+            name: t.name,
+            row_count: result?.count || 0
+          }
+        } catch (e) {
+          logger.error('DB', `Failed to get count for table ${t.name}`, e)
+          return {
+            name: t.name,
+            row_count: -1
+          }
+        }
+      })
+    })
+
+    logIpcHandler('dev:db-query', (_e, sql: string) => {
+      if (!sql.trim().toLowerCase().startsWith('select')) {
+        throw new Error('Only SELECT queries are allowed for safety')
+      }
+      return databaseManager.query(sql)
+    })
+
+    logIpcHandler('dev:db-table-info', (_e, table: string) => {
+      // Validate table name to prevent injection
+      if (!/^[a-zA-Z0-9_]+$/.test(table)) throw new Error('Invalid table name')
+      return databaseManager.query(`PRAGMA table_info(${table})`)
+    })
+
+    logIpcHandler('dev:db-path', () => {
+      return databaseManager.getDbPath()
+    })
+  } else {
+    ipcMain.handle('dev:is-dev', () => false)
+  }
 }
 
 // Initialize providers with stored keys on startup
@@ -502,8 +602,8 @@ export async function initializeStoredProviders(): Promise<void> {
       Object.entries(keyStore.getProviderGroupMapping()).forEach(([providerId, group]) => {
         if (group === groupId) initializedProviders.add(providerId)
       })
-    } catch {
-      console.warn(`Failed to initialize provider group ${groupId}`)
+    } catch (e) {
+      logger.warn('App', `Failed to initialize provider group ${groupId}`, e)
     }
   }
 
@@ -526,8 +626,8 @@ export async function initializeStoredProviders(): Promise<void> {
         await providerRegistry.initializeProvider(providerId, apiKey)
       }
       initializedProviders.add(providerId)
-    } catch {
-      console.warn(`Failed to initialize provider ${providerId}`)
+    } catch (e) {
+      logger.warn('App', `Failed to initialize provider ${providerId}`, e)
     }
   }
 

@@ -52,7 +52,11 @@ function trimPrompt(prompt: string): string {
 }
 
 function toFileUrl(path: string): string {
-  return `file:///${path.replace(/\\/g, '/')}`
+  return `asset:///${path.replace(/\\/g, '/')}`
+}
+
+function isProtectedGoogleMediaUri(uri?: string): boolean {
+  return Boolean(uri?.includes('generativelanguage.googleapis.com/download/'))
 }
 
 async function ensureRenderableResult(job: QueueJob): Promise<{
@@ -62,11 +66,18 @@ async function ensureRenderableResult(job: QueueJob): Promise<{
 } | null> {
   if (!job.result?.mimeType) return null
 
+  if ((job.type === 'video' || job.type === 'audio') && job.result.assetPath) {
+    return {
+      data: '',
+      mimeType: job.result.mimeType,
+      uri: toFileUrl(job.result.assetPath)
+    }
+  }
+
   if (job.result.data) {
     return {
       data: job.result.data,
-      mimeType: job.result.mimeType,
-      uri: job.result.uri
+      mimeType: job.result.mimeType
     }
   }
 
@@ -75,13 +86,12 @@ async function ensureRenderableResult(job: QueueJob): Promise<{
     if (base64) {
       return {
         data: base64,
-        mimeType: job.result.mimeType,
-        uri: job.result.uri
+        mimeType: job.result.mimeType
       }
     }
   }
 
-  if (job.result.uri) {
+  if (job.result.uri && !isProtectedGoogleMediaUri(job.result.uri)) {
     return {
       data: '',
       mimeType: job.result.mimeType,
@@ -104,13 +114,9 @@ function CompletedJobPreview({ job }: { job: QueueJob }): JSX.Element {
         return
       }
 
-      if (job.type === 'video') {
+      if (job.type === 'video' || job.type === 'audio') {
         if (job.result.assetPath) {
           setPreview(toFileUrl(job.result.assetPath))
-          return
-        }
-        if (job.result.uri) {
-          setPreview(job.result.uri)
           return
         }
       }
@@ -124,7 +130,12 @@ function CompletedJobPreview({ job }: { job: QueueJob }): JSX.Element {
         const base64 = await window.manthan.readAsset(job.result.assetId)
         if (!cancelled && base64) {
           setPreview(`data:${job.result.mimeType};base64,${base64}`)
+          return
         }
+      }
+
+      if (job.result.uri && !isProtectedGoogleMediaUri(job.result.uri)) {
+        setPreview(job.result.uri)
       }
     }
 

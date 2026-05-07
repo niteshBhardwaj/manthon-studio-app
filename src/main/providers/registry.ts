@@ -8,6 +8,7 @@ import { GoogleVeoProvider } from './google-veo'
 import { GoogleImagenProvider } from './google-imagen'
 import { GoogleLyriaProvider } from './google-lyria'
 import { KEY_GROUPS, PROVIDER_GROUP_MAPPING } from '../../shared/model-registry'
+import { logger } from '../logger'
 
 class ProviderRegistry {
   private providers: Map<string, MediaProvider> = new Map()
@@ -22,6 +23,7 @@ class ProviderRegistry {
 
   register(provider: MediaProvider): void {
     this.providers.set(provider.id, provider)
+    logger.debug('Provider', `Registered provider: ${provider.id}`)
   }
 
   get(id: string): MediaProvider | undefined {
@@ -68,6 +70,7 @@ class ProviderRegistry {
     const provider = this.providers.get(id)
     if (!provider) throw new Error(`Provider ${id} not found`)
     await provider.initialize(apiKey)
+    logger.info('Provider', `Initialized provider: ${id}`)
   }
 
   async initializeGroup(group: string, apiKey: string): Promise<void> {
@@ -78,6 +81,7 @@ class ProviderRegistry {
     }
 
     await Promise.all(providerIds.map((providerId) => this.initializeProvider(providerId, apiKey)))
+    logger.info('Provider', `Initialized provider group: ${group} (${providerIds.length} providers)`)
   }
 
   async testProvider(id: string): Promise<ConnectionStatus> {

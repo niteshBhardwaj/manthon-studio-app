@@ -8,6 +8,7 @@ import { app } from 'electron'
 import { join } from 'path'
 import { mkdirSync } from 'fs'
 import { MIGRATIONS } from './schema'
+import { logger } from '../logger'
 
 class DatabaseManager {
   private db: Database.Database | null = null
@@ -28,7 +29,7 @@ class DatabaseManager {
 
     this.runMigrations()
 
-    console.log(`[DB] Database initialized at: ${this.dbPath}`)
+    logger.info('DB', `Database initialized at: ${this.dbPath}`)
   }
 
   /** Get the raw database instance */
@@ -51,9 +52,9 @@ class DatabaseManager {
         // Checkpoint WAL before closing for a clean state
         this.db.pragma('wal_checkpoint(TRUNCATE)')
         this.db.close()
-        console.log('[DB] Database closed.')
+        logger.info('DB', 'Database closed.')
       } catch (e) {
-        console.error('[DB] Error closing database:', e)
+        logger.error('DB', 'Error closing database:', e)
       }
       this.db = null
     }
@@ -115,9 +116,9 @@ class DatabaseManager {
 
         try {
           runMigration()
-          console.log(`[DB] Applied migration v${migration.version}: ${migration.description}`)
+          logger.info('Migration', `Applied migration v${migration.version}: ${migration.description}`)
         } catch (e) {
-          console.error(`[DB] Failed to apply migration v${migration.version}:`, e)
+          logger.error('Migration', `Failed to apply migration v${migration.version}:`, e)
           throw e
         }
       }

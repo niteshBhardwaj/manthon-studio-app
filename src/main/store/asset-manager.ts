@@ -9,6 +9,7 @@ import { mkdirSync, existsSync, statSync, unlinkSync } from 'fs'
 import { writeFile, readFile, stat, readdir, rm } from 'fs/promises'
 import { randomUUID } from 'crypto'
 import { databaseManager } from './db'
+import { logger } from '../logger'
 
 export interface Asset {
   id: string
@@ -120,6 +121,8 @@ class AssetManager {
         now
       ]
     )
+    
+    logger.debug('Asset', `Asset saved: ${filename} (${sizeBytes} bytes)`)
 
     return this.getAsset(id)!
   }
@@ -245,11 +248,12 @@ class AssetManager {
         unlinkSync(asset.thumbnail_path)
       }
     } catch (e) {
-      console.warn(`[AssetManager] Failed to delete file for asset ${id}:`, e)
+      logger.warn('Asset', `Failed to delete file for asset ${id}:`, e)
     }
 
     // Remove DB row
     databaseManager.run('DELETE FROM assets WHERE id = ?', [id])
+    logger.debug('Asset', `Asset deleted: ${id}`)
     return true
   }
 
@@ -314,8 +318,9 @@ class AssetManager {
       await rm(this.cacheRoot, { recursive: true, force: true })
       mkdirSync(this.cacheRoot, { recursive: true })
     } catch (e) {
-      console.warn('[AssetManager] Cache cleanup error:', e)
+      logger.warn('Asset', 'Cache cleanup error:', e)
     }
+    logger.info('Asset', `Cache cleaned: freed ${sizeBefore} bytes`)
     return sizeBefore
   }
 
