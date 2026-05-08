@@ -91,8 +91,7 @@ export function buildPayload({
     throw new Error('Prompt is required')
   }
 
-  const resolvedBatchCount =
-    batchCount ?? asNumber(capabilityValues.batch_count, 'Batch count') ?? 1
+  void (batchCount ?? asNumber(capabilityValues.batch_count, 'Batch count') ?? 1)
 
   if (model.contentType === 'video') {
     const aspectRatio = assertOptionValue(

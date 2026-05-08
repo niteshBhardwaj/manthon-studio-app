@@ -54,6 +54,19 @@ const manthanAPI = {
   getPreferences: () => ipcRenderer.invoke('preferences:get'),
   setPreference: (key: string, value: unknown) => ipcRenderer.invoke('preferences:set', key, value),
 
+  authenticateGoogle: () => ipcRenderer.invoke('backup:authenticate'),
+  isGoogleAuthenticated: () => ipcRenderer.invoke('backup:is-authenticated'),
+  disconnectGoogle: () => ipcRenderer.invoke('backup:disconnect'),
+  createBackup: (options: { encrypt: boolean; password?: string }) =>
+    ipcRenderer.invoke('backup:create', options),
+  listBackups: () => ipcRenderer.invoke('backup:list'),
+  deleteBackup: (driveFileId: string) => ipcRenderer.invoke('backup:delete', driveFileId),
+  restoreBackup: (driveFileId: string, password?: string) =>
+    ipcRenderer.invoke('backup:restore', driveFileId, password),
+  getBackupSettings: () => ipcRenderer.invoke('backup:get-settings'),
+  setBackupSettings: (settings: Record<string, unknown>) =>
+    ipcRenderer.invoke('backup:set-settings', settings),
+
   getStorageBreakdown: () => ipcRenderer.invoke('storage:breakdown'),
   getSystemDiskInfo: () => ipcRenderer.invoke('storage:disk-info'),
   cleanupCache: () => ipcRenderer.invoke('storage:cleanup-cache'),
@@ -112,6 +125,11 @@ const manthanAPI = {
     subscribe('queue:job-failed', callback),
 
   // ── Dev Tools ───────────────────────────────────────────
+  onBackupProgress: (callback: (payload: unknown) => void) =>
+    subscribe('backup:progress', callback),
+  onRestoreProgress: (callback: (payload: unknown) => void) =>
+    subscribe('restore:progress', callback),
+
   isDev: () => ipcRenderer.invoke('dev:is-dev'),
   getLogLevel: () => ipcRenderer.invoke('dev:get-log-level'),
   setLogLevel: (level: string) => ipcRenderer.invoke('dev:set-log-level', level),

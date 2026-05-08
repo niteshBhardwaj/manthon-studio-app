@@ -12,12 +12,22 @@ interface KeyStoreSchema extends Record<string, unknown> {
   apiKeys: Record<string, string>
   groupKeys: Record<string, string>
   activeProvider: string | null
+  backupOAuth: {
+    refreshToken: string | null
+    accountEmail: string | null
+    folderId: string | null
+  }
 }
 
 const store = new JsonStore<KeyStoreSchema>('manthan-keys', {
   apiKeys: {},
   groupKeys: {},
-  activeProvider: null
+  activeProvider: null,
+  backupOAuth: {
+    refreshToken: null,
+    accountEmail: null,
+    folderId: null
+  }
 })
 
 function encodeKey(apiKey: string): string {
@@ -158,5 +168,50 @@ export const keyStore = {
 
   getActiveProvider(): string | null {
     return store.get('activeProvider')
+  },
+
+  saveGoogleDriveCredentials(credentials: {
+    refreshToken: string
+    accountEmail?: string | null
+    folderId?: string | null
+  }): void {
+    const current = store.get('backupOAuth')
+    store.set('backupOAuth', {
+      refreshToken: encodeKey(credentials.refreshToken),
+      accountEmail: credentials.accountEmail ?? current.accountEmail ?? null,
+      folderId: credentials.folderId ?? current.folderId ?? null
+    })
+    logger.info('App', 'Google Drive backup credentials saved')
+  },
+
+  getGoogleDriveRefreshToken(): string | null {
+    const encoded = store.get('backupOAuth')?.refreshToken
+    if (!encoded) return null
+    return decodeKey(encoded)
+  },
+
+  getGoogleDriveAccountEmail(): string | null {
+    return store.get('backupOAuth')?.accountEmail ?? null
+  },
+
+  getGoogleDriveFolderId(): string | null {
+    return store.get('backupOAuth')?.folderId ?? null
+  },
+
+  setGoogleDriveFolderId(folderId: string | null): void {
+    const current = store.get('backupOAuth')
+    store.set('backupOAuth', {
+      ...current,
+      folderId
+    })
+  },
+
+  clearGoogleDriveCredentials(): void {
+    store.set('backupOAuth', {
+      refreshToken: null,
+      accountEmail: null,
+      folderId: null
+    })
+    logger.info('App', 'Google Drive backup credentials removed')
   }
 }

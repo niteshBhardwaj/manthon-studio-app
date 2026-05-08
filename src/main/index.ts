@@ -15,6 +15,7 @@ import { appStore } from './store/app-store'
 import { storageManager } from './store/storage-manager'
 import { queueManager } from './queue/queue-manager'
 import { logger } from './logger'
+import { backupManager } from './backup/backup-manager'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -104,6 +105,7 @@ app.whenReady().then(async () => {
 
   // Initialize persistent queue processing after storage and providers are ready
   queueManager.initialize()
+  backupManager.scheduleAutoBackup()
 
   logger.info('App', 'Main process initialization complete')
   

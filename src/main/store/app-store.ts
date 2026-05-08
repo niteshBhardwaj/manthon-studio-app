@@ -36,6 +36,7 @@ interface Template {
 
 interface ListGenerationsOptions {
   projectId?: string | null
+  groupId?: string | null
   type?: 'video' | 'image' | 'audio'
   limit?: number
   offset?: number

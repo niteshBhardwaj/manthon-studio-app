@@ -7,7 +7,18 @@ import { app } from 'electron'
 import { is } from '@electron-toolkit/utils'
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'silent'
-export type LogCategory = 'DB' | 'IPC' | 'Queue' | 'Provider' | 'Asset' | 'Storage' | 'App' | 'Migration'
+export type LogCategory =
+  | 'DB'
+  | 'IPC'
+  | 'Queue'
+  | 'Provider'
+  | 'Asset'
+  | 'Storage'
+  | 'App'
+  | 'Migration'
+  | 'Backup'
+  | 'Restore'
+  | 'DRY-RUN'
 
 const LEVEL_WEIGHTS: Record<LogLevel, number> = {
   debug: 0,

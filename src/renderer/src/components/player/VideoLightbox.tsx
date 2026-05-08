@@ -1,9 +1,8 @@
-import { type JSX, useEffect, useMemo, useRef, useState } from 'react'
+import { type JSX, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Download, Film, Sparkles, X, Zap } from 'lucide-react'
+import { Download, Film, X } from 'lucide-react'
 import type { GenerationJob } from '../../stores/generation-store'
 import { useGenerationStore } from '../../stores/generation-store'
-import { Button } from '../ui/button'
 import { VideoPlayer } from './VideoPlayer'
 import { PromptInput } from '../generation/PromptInput'
 import { enqueueGeneration } from '../../lib/enqueue-generation'
@@ -31,8 +30,6 @@ function getJobSrc(job: GenerationJob): string {
   return job.result.uri || ''
 }
 
-type ExtensionMode = 'extend' | 'lastframe' | null
-
 export function VideoLightbox({
   job,
   isOpen,
@@ -43,7 +40,7 @@ export function VideoLightbox({
   onClose: () => void
 }): JSX.Element {
   const jobs = useGenerationStore((state) => state.jobs)
-  const { setExtendingJobId, updateJob, loadJobIntoPrompt } = useGenerationStore()
+  const { updateJob } = useGenerationStore()
   const { activeProjectId } = useProjectStore()
   const { addToast } = useAppStore()
   const [displayJobId, setDisplayJobId] = useState(job.id)
@@ -82,31 +79,45 @@ export function VideoLightbox({
       const rootId = job.groupId || job.id
       if (window.manthan?.listGenerations) {
         window.manthan.listGenerations({ groupId: rootId }).then((results) => {
-          if (results && results.length > 0) {
+          const items = results?.items ?? []
+          if (items.length > 0) {
             // Map StoredGeneration to GenerationJob
-            const groupJobs = results.map((g) => ({
+            const groupJobs = items.map((g) => {
+              const storedConfig = g.config as Partial<GenerationJob['config']>
+              return {
               id: g.id,
-              groupId: g.group_id,
+              groupId: g.group_id ?? undefined,
               type: g.type,
-              status: g.status,
+              status: g.status as GenerationJob['status'],
               prompt: g.prompt,
               negativePrompt: g.negative_prompt,
               provider: g.provider,
               model: g.model,
-              config: JSON.parse(g.config || '{}'),
+              config: {
+                contentType: storedConfig.contentType ?? g.type,
+                activeMode: storedConfig.activeMode ?? null,
+                batchCount: storedConfig.batchCount ?? 1,
+                capabilityValues: storedConfig.capabilityValues ?? {}
+              },
               result: g.result_asset_id
                 ? {
                     type: g.type,
+                    data: '',
                     assetId: g.result_asset_id,
-                    mimeType: g.mimeType || 'video/mp4',
-                    thumbnailPath: g.thumbnailPath
+                    mimeType:
+                      g.type === 'audio'
+                        ? 'audio/mpeg'
+                        : g.type === 'image'
+                          ? 'image/png'
+                          : 'video/mp4'
                   }
                 : undefined,
               progress: g.progress,
-              startedAt: g.startedAt,
-              completedAt: g.completedAt
-            }))
-            useGenerationStore.getState().addJobs(groupJobs as any)
+              startedAt: g.started_at,
+              completedAt: g.completed_at ?? undefined
+            }
+            })
+            useGenerationStore.getState().addJobs(groupJobs)
           }
         })
       }
@@ -136,7 +147,8 @@ export function VideoLightbox({
       let videoBase64 = displayJob.result.data
       if (!videoBase64 && displayJob.result.assetId && window.manthan?.readAsset) {
         try {
-          videoBase64 = await window.manthan.readAsset(displayJob.result.assetId)
+          const assetData = await window.manthan.readAsset(displayJob.result.assetId)
+          if (assetData) videoBase64 = assetData
         } catch (e) {
           console.warn('Could not read asset from disk', e)
         }

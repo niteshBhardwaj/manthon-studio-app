@@ -44,6 +44,7 @@ export interface GenerationJob {
     mimeType: string
     uri?: string
     assetId?: string
+    thumbnailPath?: string | null
   }
   error?: string
   progress: number

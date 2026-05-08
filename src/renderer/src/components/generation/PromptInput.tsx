@@ -33,6 +33,7 @@ import { AssetPickerModal } from './AssetPickerModal'
 import { MorphingDialog, MorphingDialogTrigger } from '../motion-primitives/morphing-dialog'
 
 interface PromptInputProps {
+  variant?: 'default' | 'lightbox'
   value?: string
   onChange?: (value: string) => void
   selectedModel?: string

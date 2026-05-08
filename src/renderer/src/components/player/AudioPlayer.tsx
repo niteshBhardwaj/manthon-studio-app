@@ -12,7 +12,6 @@ export interface AudioPlayerProps {
 
 export function AudioPlayer({
   src,
-  mimeType,
   autoPlay = false,
   className,
   compact = false

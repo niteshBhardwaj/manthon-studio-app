@@ -17,6 +17,15 @@ import type {
   RetentionResult,
   StorageReport
 } from '../main/store/storage-manager'
+import type {
+  BackupInfo,
+  BackupProgress,
+  BackupSettings,
+  CreateBackupOptions,
+  CreateBackupResult,
+  GoogleAuthStatus,
+  RestoreResult
+} from '../main/backup/types'
 
 interface ManthanAPI {
   saveApiKey: (provider: string, key: string) => Promise<{ success: boolean; error?: string }>
@@ -91,6 +100,18 @@ interface ManthanAPI {
   getPreferences: () => Promise<Record<string, unknown>>
   setPreference: (key: string, value: unknown) => Promise<{ success: boolean }>
 
+  authenticateGoogle: () => Promise<{ accessToken: string; email: string | null; folderId: string }>
+  isGoogleAuthenticated: () => Promise<GoogleAuthStatus>
+  disconnectGoogle: () => Promise<{ success: boolean }>
+  createBackup: (options: CreateBackupOptions) => Promise<CreateBackupResult>
+  listBackups: () => Promise<BackupInfo[]>
+  deleteBackup: (driveFileId: string) => Promise<{ success: boolean }>
+  restoreBackup: (driveFileId: string, password?: string) => Promise<RestoreResult>
+  getBackupSettings: () => Promise<BackupSettings>
+  setBackupSettings: (
+    settings: Partial<BackupSettings> & { sessionPassword?: string }
+  ) => Promise<BackupSettings>
+
   getStorageBreakdown: () => Promise<StorageReport>
   getSystemDiskInfo: () => Promise<DiskInfo>
   cleanupCache: () => Promise<number>
@@ -150,6 +171,9 @@ interface ManthanAPI {
   onQueueJobFailed: (callback: (payload: QueueJobFailedPayload) => void) => () => void
 
   // ── Dev Tools ───────────────────────────────────────────
+  onBackupProgress: (callback: (payload: BackupProgress) => void) => () => void
+  onRestoreProgress: (callback: (payload: BackupProgress) => void) => () => void
+
   isDev: () => Promise<boolean>
   getLogLevel: () => Promise<string>
   setLogLevel: (level: string) => Promise<{ success: boolean }>
@@ -157,7 +181,7 @@ interface ManthanAPI {
   queryDb: (sql: string) => Promise<any[]>
   getDbTableInfo: (table: string) => Promise<any[]>
   getDbPath: () => Promise<string>
-  listApiLogs: (limit?: number) => Promise<Array<{ id: string; provider: string; method: string; payload: string; created_at: number }>>
+  listApiLogs: (limit?: number) => Promise<Array<{ id: string; job_id: string | null; provider: string; method: string; payload: string; created_at: number }>>
   clearApiLogs: () => Promise<{ success: boolean }>
 }
 
@@ -192,6 +216,7 @@ interface AssetInfo {
 
 interface GenerationRecord {
   id: string
+  group_id: string | null
   project_id: string | null
   type: 'video' | 'image' | 'audio'
   status: string

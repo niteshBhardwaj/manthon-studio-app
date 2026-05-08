@@ -7,6 +7,7 @@ import { databaseManager } from '../store/db'
 import { jobProcessor } from './job-processor'
 import { notifyBatchComplete, notifyJobComplete, notifyJobFailed } from '../notifications'
 import { logger } from '../logger'
+import { backupManager } from '../backup/backup-manager'
 import type {
   EnqueueJobInput,
   QueueConfig,
@@ -409,6 +410,12 @@ class QueueManager {
         job: completedJob,
         result: storedResult
       } satisfies QueueJobCompletePayload)
+    }
+
+    if (asset && job.type === 'video') {
+      void backupManager.syncGeneratedVideoAsset(asset.id).catch((error) => {
+        logger.warn('Backup', 'Generated video sync failed:', error)
+      })
     }
 
     await this.emitQueueUpdate()

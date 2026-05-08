@@ -4,7 +4,7 @@
 // ============================================================
 
 import { type JSX, useEffect, useState } from 'react'
-import { Terminal, Trash2, Search, Calendar, Cpu, Code2, ChevronRight, Copy, Check } from 'lucide-react'
+import { Terminal, Trash2, Search, Calendar, Cpu, ChevronRight, Copy, Check } from 'lucide-react'
 import { cn } from '../lib/utils'
 
 interface ApiLog {

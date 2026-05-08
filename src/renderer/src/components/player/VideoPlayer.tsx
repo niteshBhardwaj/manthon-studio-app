@@ -273,22 +273,6 @@ export function VideoPlayer({
     [duration]
   )
 
-  const handleCompactMouseMove = useCallback((event: React.MouseEvent<HTMLVideoElement>) => {
-    if (!event.currentTarget.matches(':hover')) return
-
-    const video = videoRef.current
-    if (!video || !video.duration) return
-
-    const rect = event.currentTarget.getBoundingClientRect()
-    const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width))
-    const targetTime = ratio * video.duration
-
-    if (Math.abs(video.currentTime - targetTime) > 0.1) {
-      video.currentTime = targetTime
-      setCurrentTime(targetTime)
-    }
-  }, [])
-
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
       const video = videoRef.current

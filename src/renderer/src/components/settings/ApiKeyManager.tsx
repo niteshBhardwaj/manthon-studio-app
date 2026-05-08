@@ -1,6 +1,7 @@
 import { type JSX, useMemo, useState } from 'react'
 import {
   Check,
+  Cloud,
   Eye,
   EyeOff,
   FlaskConical,
@@ -21,9 +22,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '../ui/input'
 import { Button } from '../ui/button'
 import { StorageDashboard } from './StorageDashboard'
+import { BackupSettings } from './BackupSettings'
 import { useEffect } from 'react'
 
-type SettingsTab = 'models' | 'keys' | 'storage' | 'developer'
+type SettingsTab = 'models' | 'keys' | 'storage' | 'backup' | 'developer'
 
 const contentTypeMeta: Record<ContentType, { label: string; icon: typeof ImageIcon }> = {
   image: { label: 'Image Models', icon: ImageIcon },
@@ -110,13 +112,14 @@ export function ApiKeyManager(): JSX.Element {
                 { id: 'models', label: 'Models', icon: Settings2 },
                 { id: 'keys', label: 'Keys', icon: Check },
                 { id: 'storage', label: 'Storage', icon: HardDrive },
+                { id: 'backup', label: 'Backup & Sync', icon: Cloud },
                 ...(isDev ? [{ id: 'developer', label: 'Developer', icon: FlaskConical }] : [])
               ] as const
             ).map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
                 type="button"
-                onClick={() => setActiveTab(id)}
+                onClick={() => setActiveTab(id as SettingsTab)}
                 className={cn(
                   'flex h-10 items-center gap-2 rounded-full px-4 text-sm font-medium transition-all',
                   activeTab === id
@@ -350,6 +353,8 @@ export function ApiKeyManager(): JSX.Element {
             </div>
           ) : activeTab === 'storage' ? (
             <StorageDashboard />
+          ) : activeTab === 'backup' ? (
+            <BackupSettings />
           ) : (
             <div className="space-y-6">
               <section className="space-y-3">

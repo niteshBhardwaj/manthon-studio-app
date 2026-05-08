@@ -17,6 +17,9 @@ import type { EnqueueJobInput } from '../queue/types'
 import { queueManager } from '../queue/queue-manager'
 import { databaseManager } from '../store/db'
 import { logger } from '../logger'
+import { googleAuth } from '../backup/google-auth'
+import { backupManager } from '../backup/backup-manager'
+import { restoreManager } from '../backup/restore-manager'
 
 function summarizeArgs(args: any[]): any {
   return args.map(arg => {
@@ -260,6 +263,43 @@ export function registerIpcHandlers(): void {
   })
 
   // ── File System ─────────────────────────────────────────
+  // Backup & Restore
+  logIpcHandler('backup:authenticate', async () => {
+    return googleAuth.authenticate()
+  })
+
+  logIpcHandler('backup:is-authenticated', async () => {
+    return googleAuth.isAuthenticated()
+  })
+
+  logIpcHandler('backup:disconnect', async () => {
+    return googleAuth.disconnect()
+  })
+
+  logIpcHandler('backup:create', async (_event, options: { encrypt: boolean; password?: string }) => {
+    return backupManager.createBackup(options)
+  })
+
+  logIpcHandler('backup:list', async () => {
+    return backupManager.listBackups()
+  })
+
+  logIpcHandler('backup:delete', async (_event, driveFileId: string) => {
+    return backupManager.deleteBackup(driveFileId)
+  })
+
+  logIpcHandler('backup:restore', async (_event, driveFileId: string, password?: string) => {
+    return restoreManager.restoreBackup(driveFileId, password)
+  })
+
+  logIpcHandler('backup:get-settings', async () => {
+    return backupManager.getSettings()
+  })
+
+  logIpcHandler('backup:set-settings', async (_event, settings) => {
+    return backupManager.setSettings(settings)
+  })
+
   logIpcHandler('file:save', async (_event, data: string, filename: string) => {
     const mediaDir = join(app.getPath('userData'), 'media')
     await mkdir(mediaDir, { recursive: true })
