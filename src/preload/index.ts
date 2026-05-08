@@ -118,7 +118,9 @@ const manthanAPI = {
   getDbTables: () => ipcRenderer.invoke('dev:db-tables'),
   queryDb: (sql: string) => ipcRenderer.invoke('dev:db-query', sql),
   getDbTableInfo: (table: string) => ipcRenderer.invoke('dev:db-table-info', table),
-  getDbPath: () => ipcRenderer.invoke('dev:db-path')
+  getDbPath: () => ipcRenderer.invoke('dev:db-path'),
+  listApiLogs: (limit?: number) => ipcRenderer.invoke('dev:list-api-logs', limit),
+  clearApiLogs: () => ipcRenderer.invoke('dev:clear-api-logs')
 }
 
 if (process.contextIsolated) {

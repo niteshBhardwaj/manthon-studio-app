@@ -46,6 +46,8 @@ export interface VideoGenParams {
   referenceImages?: Array<{ data: string; mimeType: string; referenceType: string }>
   // Video extension
   video?: { data: string; mimeType: string }
+  // Debug
+  jobId?: string
 }
 
 export interface ImageGenParams {
@@ -60,6 +62,8 @@ export interface ImageGenParams {
   webSearchGrounding?: boolean
   imageSearchGrounding?: boolean
   thoughtSignature?: string
+  // Debug
+  jobId?: string
 }
 
 export interface AudioGenParams {
@@ -68,6 +72,8 @@ export interface AudioGenParams {
   duration?: number
   audioFormat?: 'mp3' | 'wav'
   referenceImages?: Array<{ data: string; mimeType: string }>
+  // Debug
+  jobId?: string
 }
 
 export interface GenerationOperation {

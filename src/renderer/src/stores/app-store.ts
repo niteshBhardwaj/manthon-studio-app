@@ -5,7 +5,7 @@
 
 import { create } from 'zustand'
 
-type SidebarTab = 'create' | 'queue' | 'history' | 'assets' | 'templates' | 'settings' | 'db-explorer'
+type SidebarTab = 'create' | 'queue' | 'history' | 'assets' | 'templates' | 'settings' | 'db-explorer' | 'api-logs'
 type ModalType = 'settings' | 'api-keys' | 'prompt-builder' | null
 type ToastTone = 'info' | 'success' | 'error'
 

@@ -582,6 +582,15 @@ export function registerIpcHandlers(): void {
     logIpcHandler('dev:db-path', () => {
       return databaseManager.getDbPath()
     })
+
+    logIpcHandler('dev:list-api-logs', (_e, limit?: number) => {
+      return appStore.listApiLogs(limit)
+    })
+
+    logIpcHandler('dev:clear-api-logs', () => {
+      appStore.clearApiLogs()
+      return { success: true }
+    })
   } else {
     ipcMain.handle('dev:is-dev', () => false)
   }

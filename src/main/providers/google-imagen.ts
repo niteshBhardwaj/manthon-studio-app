@@ -14,6 +14,7 @@ import {
   GenerationResult
 } from './base'
 import { logger } from '../logger'
+import { appStore } from '../store/app-store'
 
 export class GoogleImagenProvider implements MediaProvider {
   id = 'google-imagen'
@@ -144,6 +145,20 @@ export class GoogleImagenProvider implements MediaProvider {
       if (params.webSearchGrounding) {
         config.tools = config.tools || []
         config.tools.push({ googleSearch: {} })
+      }
+
+      // DRY RUN: Log and intercept if enabled in preferences
+      if (appStore.getPreferences().dryRun) {
+        const requestPayload = { model, contents, config }
+        const payloadString = JSON.stringify(requestPayload, null, 2)
+        logger.info('DRY-RUN', 'Imagen API Payload intercepted', { payload: requestPayload })
+        appStore.saveApiLog({
+          jobId: params.jobId,
+          provider: this.id,
+          method: 'generateImage',
+          payload: payloadString
+        })
+        throw new Error('DRY RUN: API request captured and logged to database.')
       }
 
       const response = await this.client.models.generateContent({

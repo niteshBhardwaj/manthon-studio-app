@@ -157,6 +157,8 @@ interface ManthanAPI {
   queryDb: (sql: string) => Promise<any[]>
   getDbTableInfo: (table: string) => Promise<any[]>
   getDbPath: () => Promise<string>
+  listApiLogs: (limit?: number) => Promise<Array<{ id: string; provider: string; method: string; payload: string; created_at: number }>>
+  clearApiLogs: () => Promise<{ success: boolean }>
 }
 
 interface ProjectInfo {

@@ -42,7 +42,7 @@ export class JobProcessor {
       throw new Error(`Provider ${job.provider} does not support video generation`)
     }
 
-    const params = this.getProviderParams<VideoGenParams>(job.config)
+    const params = { ...this.getProviderParams<VideoGenParams>(job.config), jobId: job.id }
     const operation = await this.withTimeout(
       provider.generateVideo(params),
       DEFAULT_TIMEOUT_MS,
@@ -115,7 +115,7 @@ export class JobProcessor {
 
     options.onProgress({ jobId: job.id, progress: 20, status: 'running' })
     const result = await this.withTimeout(
-      provider.generateImage(this.getProviderParams<ImageGenParams>(job.config)),
+      provider.generateImage({ ...this.getProviderParams<ImageGenParams>(job.config), jobId: job.id }),
       DEFAULT_TIMEOUT_MS,
       `Image generation for ${job.id}`,
       options.signal
@@ -139,7 +139,7 @@ export class JobProcessor {
 
     options.onProgress({ jobId: job.id, progress: 20, status: 'running' })
     const result = await this.withTimeout(
-      provider.generateAudio(this.getProviderParams<AudioGenParams>(job.config)),
+      provider.generateAudio({ ...this.getProviderParams<AudioGenParams>(job.config), jobId: job.id }),
       DEFAULT_TIMEOUT_MS,
       `Audio generation for ${job.id}`,
       options.signal

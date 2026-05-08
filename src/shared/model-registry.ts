@@ -318,8 +318,90 @@ export const MODEL_REGISTRY: ModelDescriptor[] = [
     ]
   },
   {
+    id: 'gemini-3.1-flash-image-preview',
+    name: 'Nano Banana 3.1 Flash Preview',
+    provider: 'google-imagen',
+    keyGroup: 'google',
+    contentType: 'image',
+    description: 'High-efficiency image generation optimized for speed.',
+    icon: 'image',
+    maxImages: 14,
+    capabilities: [
+      {
+        type: 'aspect_ratio',
+        label: 'Aspect Ratio',
+        options: aspectRatioImageExtendedOptions,
+        defaultValue: '1:1'
+      },
+      {
+        type: 'resolution',
+        label: 'Resolution',
+        options: imageResolutionExtendedOptions,
+        defaultValue: '1K'
+      },
+      {
+        type: 'batch_count',
+        label: 'Batch Count',
+        options: batchCountOptions,
+        defaultValue: 1
+      },
+      {
+        type: 'thinking_level',
+        label: 'Thinking Level',
+        options: thinkingLevelOptions,
+        defaultValue: 'minimal'
+      },
+      {
+        type: 'web_search_grounding',
+        label: 'Web Search Grounding',
+        defaultValue: false
+      },
+      {
+        type: 'image_search_grounding',
+        label: 'Image Search Grounding',
+        defaultValue: false
+      }
+    ],
+    examples: [
+      {
+        title: 'Simple Subject + Context',
+        prompt: 'A red panda sticker with a white border, cartoon style, cute.',
+        imageName: 'red_panda_sticker',
+        configOverrides: { aspect_ratio: '1:1' }
+      },
+      {
+        title: 'Photorealism / Lighting',
+        prompt:
+          'A portrait of a young woman with freckles, cinematic lighting, dramatic shadows, 85mm lens, photorealistic.',
+        imageName: 'photorealistic_example',
+        configOverrides: { aspect_ratio: '3:4' }
+      },
+      {
+        title: 'Style Transfer (via Thinking)',
+        prompt:
+          'Generate a futuristic city. Thought process: 1. Start with a modern skyline. 2. Add flying cars and neon lights. 3. Apply a cyberpunk color palette.',
+        imageName: 'city_style_transfer',
+        configOverrides: { thinking_level: 'high', include_thoughts: true }
+      },
+      {
+        title: 'Image Search Grounding',
+        prompt:
+          'Use image search to find accurate images of a resplendent quetzal bird. Create a beautiful 3:2 wallpaper of this bird, with a natural top to bottom gradient and minimal composition.',
+        imageName: 'quetzal_bird_wallpaper',
+        configOverrides: { image_search_grounding: true, aspect_ratio: '3:2' }
+      },
+      {
+        title: 'Photorealistic Isometric',
+        prompt:
+          "Make a photo that is perfectly isometric. It is not a miniature, it is a captured photo that just happened to be perfectly isometric. It is a photo of a beautiful modern garden. There's a large 2 shaped pool and the words: Nano Banana 2.",
+        imageName: 'isometric_garden',
+        configOverrides: { aspect_ratio: '1:1' }
+      }
+    ]
+  },
+  {
     id: 'gemini-3-pro-image-preview',
-    name: 'Nano Banana Pro',
+    name: 'Nano Banana 3 Pro Preview',
     provider: 'google-imagen',
     keyGroup: 'google',
     contentType: 'image',
@@ -427,90 +509,8 @@ export const MODEL_REGISTRY: ModelDescriptor[] = [
     ]
   },
   {
-    id: 'gemini-3.1-flash-image-preview',
-    name: 'Nano Banana 2',
-    provider: 'google-imagen',
-    keyGroup: 'google',
-    contentType: 'image',
-    description: 'High-efficiency image generation optimized for speed.',
-    icon: 'image',
-    maxImages: 14,
-    capabilities: [
-      {
-        type: 'aspect_ratio',
-        label: 'Aspect Ratio',
-        options: aspectRatioImageExtendedOptions,
-        defaultValue: '1:1'
-      },
-      {
-        type: 'resolution',
-        label: 'Resolution',
-        options: imageResolutionExtendedOptions,
-        defaultValue: '1K'
-      },
-      {
-        type: 'batch_count',
-        label: 'Batch Count',
-        options: batchCountOptions,
-        defaultValue: 1
-      },
-      {
-        type: 'thinking_level',
-        label: 'Thinking Level',
-        options: thinkingLevelOptions,
-        defaultValue: 'minimal'
-      },
-      {
-        type: 'web_search_grounding',
-        label: 'Web Search Grounding',
-        defaultValue: false
-      },
-      {
-        type: 'image_search_grounding',
-        label: 'Image Search Grounding',
-        defaultValue: false
-      }
-    ],
-    examples: [
-      {
-        title: 'Simple Subject + Context',
-        prompt: 'A red panda sticker with a white border, cartoon style, cute.',
-        imageName: 'red_panda_sticker',
-        configOverrides: { aspect_ratio: '1:1' }
-      },
-      {
-        title: 'Photorealism / Lighting',
-        prompt:
-          'A portrait of a young woman with freckles, cinematic lighting, dramatic shadows, 85mm lens, photorealistic.',
-        imageName: 'photorealistic_example',
-        configOverrides: { aspect_ratio: '3:4' }
-      },
-      {
-        title: 'Style Transfer (via Thinking)',
-        prompt:
-          'Generate a futuristic city. Thought process: 1. Start with a modern skyline. 2. Add flying cars and neon lights. 3. Apply a cyberpunk color palette.',
-        imageName: 'city_style_transfer',
-        configOverrides: { thinking_level: 'high', include_thoughts: true }
-      },
-      {
-        title: 'Image Search Grounding',
-        prompt:
-          'Use image search to find accurate images of a resplendent quetzal bird. Create a beautiful 3:2 wallpaper of this bird, with a natural top to bottom gradient and minimal composition.',
-        imageName: 'quetzal_bird_wallpaper',
-        configOverrides: { image_search_grounding: true, aspect_ratio: '3:2' }
-      },
-      {
-        title: 'Photorealistic Isometric',
-        prompt:
-          "Make a photo that is perfectly isometric. It is not a miniature, it is a captured photo that just happened to be perfectly isometric. It is a photo of a beautiful modern garden. There's a large 2 shaped pool and the words: Nano Banana 2.",
-        imageName: 'isometric_garden',
-        configOverrides: { aspect_ratio: '1:1' }
-      }
-    ]
-  },
-  {
     id: 'gemini-2.5-flash-image',
-    name: 'Nano Banana Classic',
+    name: 'Nano Banana(2.5 Flash)',
     provider: 'google-imagen',
     keyGroup: 'google',
     contentType: 'image',

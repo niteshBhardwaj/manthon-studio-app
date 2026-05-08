@@ -15,6 +15,7 @@ import {
   GenerationStatus
 } from './base'
 import { logger } from '../logger'
+import { appStore } from '../store/app-store'
 
 export class GoogleVeoProvider implements MediaProvider {
   id = 'google-veo'
@@ -180,6 +181,19 @@ export class GoogleVeoProvider implements MediaProvider {
 
       if (Object.keys(genConfig).length > 0) {
         requestParams.config = genConfig
+      }
+
+      // DRY RUN: Log and intercept if enabled in preferences
+      if (appStore.getPreferences().dryRun) {
+        const payload = JSON.stringify(requestParams, null, 2)
+        logger.info('DRY-RUN', 'Veo API Payload intercepted', { payload: requestParams })
+        appStore.saveApiLog({
+          jobId: params.jobId,
+          provider: this.id,
+          method: 'generateVideo',
+          payload
+        })
+        throw new Error('DRY RUN: API request captured and logged to database.')
       }
 
       // Start the generation

@@ -331,7 +331,7 @@ class QueueManager {
 
         await this.onJobComplete(job.id, result)
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Queue processing failed'
+        const message = error instanceof Error ? error.message : String(error)
         if (message === 'Job cancelled') {
           await this.cancelJob(job.id)
           return
@@ -423,7 +423,10 @@ class QueueManager {
     this.runningJobs.delete(id)
     this.progressByJob.delete(id)
 
-    if (job.retry_count < job.max_retries) {
+    // Skip retries if this is a developer Dry-Run interception
+    const isDryRun = error.toLowerCase().includes('dry run') || appStore.getPreferences().dryRun === true
+
+    if (!isDryRun && job.retry_count < job.max_retries) {
       databaseManager.run(
         `UPDATE job_queue
          SET status = 'pending',

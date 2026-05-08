@@ -3,7 +3,7 @@
 // Navigation with cinematic minimal design
 // ============================================================
 
-import { Plus, Clock, FolderOpen, Sparkles, Settings, ListOrdered, Database } from 'lucide-react'
+import { Plus, Clock, FolderOpen, Sparkles, Settings, ListOrdered, Database, Terminal } from 'lucide-react'
 import { type JSX } from 'react'
 import { useAppStore } from '../../stores/app-store'
 import { useQueueStore } from '../../stores/queue-store'
@@ -16,7 +16,8 @@ const navItems = [
   { id: 'history' as const, icon: Clock, label: 'History' },
   { id: 'assets' as const, icon: FolderOpen, label: 'Assets' },
   { id: 'templates' as const, icon: Sparkles, label: 'Templates' },
-  { id: 'db-explorer' as const, icon: Database, label: 'DB Explorer', devOnly: true }
+  { id: 'db-explorer' as const, icon: Database, label: 'DB Explorer', devOnly: true },
+  { id: 'api-logs' as const, icon: Terminal, label: 'API Logs', devOnly: true }
 ]
 
 export function Sidebar(): JSX.Element {

@@ -3,11 +3,13 @@ import {
   Check,
   Eye,
   EyeOff,
+  FlaskConical,
   HardDrive,
   Image as ImageIcon,
   Loader2,
   Music,
   Settings2,
+  Terminal,
   Video
 } from 'lucide-react'
 import { useAppStore } from '../../stores/app-store'
@@ -19,8 +21,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '../ui/input'
 import { Button } from '../ui/button'
 import { StorageDashboard } from './StorageDashboard'
+import { useEffect } from 'react'
 
-type SettingsTab = 'models' | 'keys' | 'storage'
+type SettingsTab = 'models' | 'keys' | 'storage' | 'developer'
 
 const contentTypeMeta: Record<ContentType, { label: string; icon: typeof ImageIcon }> = {
   image: { label: 'Image Models', icon: ImageIcon },
@@ -29,7 +32,7 @@ const contentTypeMeta: Record<ContentType, { label: string; icon: typeof ImageIc
 }
 
 export function ApiKeyManager(): JSX.Element {
-  const { closeModal } = useAppStore()
+  const { closeModal, isDev } = useAppStore()
   const { enabledModelIds, toggleModel } = useModelStore()
   const { providers, updateProviderStatus, fetchProviders } = useProviderStore()
   const [activeTab, setActiveTab] = useState<SettingsTab>('models')
@@ -37,6 +40,19 @@ export function ApiKeyManager(): JSX.Element {
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({})
   const [testingGroups, setTestingGroups] = useState<Record<string, boolean>>({})
   const [savingGroups, setSavingGroups] = useState<Record<string, boolean>>({})
+  const [dryRun, setDryRun] = useState(false)
+
+  useEffect(() => {
+    window.manthan?.getPreferences().then(prefs => {
+      setDryRun(Boolean(prefs.dryRun))
+    })
+  }, [])
+
+  const handleDryRunToggle = async () => {
+    const newValue = !dryRun
+    await window.manthan?.setPreference('dryRun', newValue)
+    setDryRun(newValue)
+  }
 
   const modelsByType = useMemo(
     () =>
@@ -93,7 +109,8 @@ export function ApiKeyManager(): JSX.Element {
               [
                 { id: 'models', label: 'Models', icon: Settings2 },
                 { id: 'keys', label: 'Keys', icon: Check },
-                { id: 'storage', label: 'Storage', icon: HardDrive }
+                { id: 'storage', label: 'Storage', icon: HardDrive },
+                ...(isDev ? [{ id: 'developer', label: 'Developer', icon: FlaskConical }] : [])
               ] as const
             ).map(({ id, label, icon: Icon }) => (
               <button
@@ -331,8 +348,66 @@ export function ApiKeyManager(): JSX.Element {
                 )
               })}
             </div>
-          ) : (
+          ) : activeTab === 'storage' ? (
             <StorageDashboard />
+          ) : (
+            <div className="space-y-6">
+              <section className="space-y-3">
+                <div className="flex items-center gap-2 text-sm font-semibold text-text-primary">
+                  <Terminal className="h-4 w-4 text-text-muted" />
+                  <span>Developer Diagnostics</span>
+                </div>
+                
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={handleDryRunToggle}
+                    className={cn(
+                      'w-full rounded-2xl border p-4 text-left transition-all',
+                      dryRun
+                        ? 'border-accent/30 bg-accent-soft'
+                        : 'border-border-subtle bg-bg-elevated/30 hover:bg-bg-hover'
+                    )}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={cn(
+                          'mt-0.5 flex h-5 w-5 items-center justify-center rounded-md border text-[10px]',
+                          dryRun
+                            ? 'border-transparent bg-white text-black'
+                            : 'border-border-subtle text-transparent'
+                        )}
+                      >
+                        ✓
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-text-primary">
+                            API Dry-Run Mode
+                          </span>
+                          {dryRun && (
+                            <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-400">
+                              ACTIVE
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-xs leading-5 text-text-muted">
+                          Intercept and log all API requests to the database instead of calling the actual services. 
+                          Useful for debugging payload structure and saving costs during UI development.
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              </section>
+
+              <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-4">
+                <p className="text-[11px] text-amber-200/80 leading-relaxed">
+                  <strong>Note:</strong> Dry-run logs can be viewed in the "API Logs" tab on the sidebar. 
+                  This feature is only available in development mode.
+                </p>
+              </div>
+            </div>
           )}
         </div>
 

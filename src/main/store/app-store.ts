@@ -24,6 +24,7 @@ interface Preferences {
   enabledModels: string[]
   notificationsEnabled: boolean
   logLevel: LogLevel
+  dryRun: boolean
 }
 
 interface Template {
@@ -109,7 +110,8 @@ const DEFAULT_PREFERENCES: Preferences = {
   defaultResolution: '1080p',
   enabledModels: MODEL_REGISTRY.map((model) => model.id),
   notificationsEnabled: true,
-  logLevel: (process.env.NODE_ENV === 'development' || !app.isPackaged) ? 'debug' : 'warn'
+  logLevel: (process.env.NODE_ENV === 'development' || !app.isPackaged) ? 'debug' : 'warn',
+  dryRun: false
 }
 
 // ── JSON → SQLite Migration ─────────────────────────────────
@@ -423,6 +425,26 @@ export const appStore = {
        VALUES (?, NULL, ?, ?, ?, '[]', ?)`,
       [template.id, template.name, template.prompt, template.category, Date.now()]
     )
+  },
+
+  // ── API Logs ───────────────────────────────────────────────
+
+  saveApiLog(log: { jobId?: string; provider: string; method: string; payload: string }): void {
+    databaseManager.run(
+      'INSERT INTO api_logs (id, job_id, provider, method, payload, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [randomUUID(), log.jobId ?? null, log.provider, log.method, log.payload, Date.now()]
+    )
+  },
+
+  listApiLogs(limit = 100): Array<{ id: string; provider: string; method: string; payload: string; created_at: number }> {
+    return databaseManager.query(
+      'SELECT * FROM api_logs ORDER BY created_at DESC LIMIT ?',
+      [limit]
+    )
+  },
+
+  clearApiLogs(): void {
+    databaseManager.run('DELETE FROM api_logs')
   }
 }
 

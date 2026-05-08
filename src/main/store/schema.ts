@@ -172,5 +172,21 @@ export const MIGRATIONS: Migration[] = [
       ALTER TABLE job_queue ADD COLUMN group_id TEXT;
       CREATE INDEX IF NOT EXISTS idx_job_queue_group_id ON job_queue(group_id);
     `
+  },
+  {
+    version: 4,
+    description: 'Add api_logs table for dry-run inspection with job_id',
+    sql: `
+      DROP TABLE IF EXISTS api_logs;
+      CREATE TABLE IF NOT EXISTS api_logs (
+        id TEXT PRIMARY KEY,
+        job_id TEXT,
+        provider TEXT NOT NULL,
+        method TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_api_logs_created_at ON api_logs(created_at DESC);
+    `
   }
 ]

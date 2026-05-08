@@ -14,6 +14,7 @@ import {
   GenerationResult
 } from './base'
 import { logger } from '../logger'
+import { appStore } from '../store/app-store'
 
 export class GoogleLyriaProvider implements MediaProvider {
   id = 'google-lyria'
@@ -132,6 +133,19 @@ export class GoogleLyriaProvider implements MediaProvider {
           responseModalities: ['AUDIO', 'TEXT'],
           responseMimeType: 'audio/wav'
         }
+      }
+
+      // DRY RUN: Log and intercept if enabled in preferences
+      if (appStore.getPreferences().dryRun) {
+        const payloadString = JSON.stringify(request, null, 2)
+        logger.info('DRY-RUN', 'Lyria API Payload intercepted', { payload: request })
+        appStore.saveApiLog({
+          jobId: params.jobId,
+          provider: this.id,
+          method: 'generateAudio',
+          payload: payloadString
+        })
+        throw new Error('DRY RUN: API request captured and logged to database.')
       }
 
       const response = await this.client.models.generateContent(request)
