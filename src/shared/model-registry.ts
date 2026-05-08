@@ -62,6 +62,7 @@ export interface ModelDescriptor {
   description: string
   icon: string
   maxImages?: number
+  supportsVideoExtension?: boolean
   capabilities: ModelCapability[]
   modes?: ModelModeDescriptor[]
   examples?: PromptExample[]
@@ -147,6 +148,7 @@ export const MODEL_REGISTRY: ModelDescriptor[] = [
     contentType: 'video',
     description: 'High-fidelity video generation with native audio.',
     icon: 'video',
+    supportsVideoExtension: true,
     capabilities: [
       ...videoSharedCapabilities,
       {
@@ -158,11 +160,6 @@ export const MODEL_REGISTRY: ModelDescriptor[] = [
           { value: '4k', label: '4K' }
         ],
         defaultValue: '1080p'
-      },
-      {
-        type: 'audio_toggle',
-        label: 'Audio',
-        defaultValue: true
       },
       {
         type: 'person_generation',
@@ -179,11 +176,10 @@ export const MODEL_REGISTRY: ModelDescriptor[] = [
         label: 'Duration',
         options: [
           { value: '4', label: '4s' },
-          { value: '5', label: '5s', default: true },
           { value: '6', label: '6s' },
-          { value: '8', label: '8s' }
+          { value: '8', label: '8s', default: true }
         ],
-        defaultValue: '5'
+        defaultValue: '8'
       }
     ],
     examples: [
@@ -259,6 +255,7 @@ export const MODEL_REGISTRY: ModelDescriptor[] = [
     contentType: 'video',
     description: 'Faster video generation with lighter controls.',
     icon: 'video',
+    supportsVideoExtension: true,
     capabilities: videoSharedCapabilities,
     examples: [
       {
@@ -299,9 +296,24 @@ export const MODEL_REGISTRY: ModelDescriptor[] = [
         defaultValue: '1080p'
       },
       {
-        type: 'audio_toggle',
-        label: 'Audio',
-        defaultValue: true
+        type: 'person_generation',
+        label: 'Person Generation',
+        options: [
+          { value: 'allow_all', label: 'Allow All', default: true },
+          { value: 'allow_adult', label: 'Allow Adult' },
+          { value: 'dont_allow', label: "Don't Allow" }
+        ],
+        defaultValue: 'allow_all'
+      },
+      {
+        type: 'duration_seconds',
+        label: 'Duration',
+        options: [
+          { value: '4', label: '4s' },
+          { value: '6', label: '6s' },
+          { value: '8', label: '8s', default: true }
+        ],
+        defaultValue: '8'
       }
     ]
   },

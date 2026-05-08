@@ -4,12 +4,14 @@ import type { BinaryInput, GenerationJob } from '../stores/generation-store'
 import { useAppStore } from '../stores/app-store'
 
 interface EnqueueGenerationArgs {
+  groupId?: string
   prompt: string
   negativePrompt?: string
   selectedModel: string
   capabilityValues: Record<string, string | number | boolean>
   startFrame: BinaryInput | null
   endFrame: BinaryInput | null
+  videoInput: BinaryInput | null
   referenceImages: BinaryInput[]
   batchCount: number
   activeMode: string | null
@@ -23,6 +25,7 @@ export function queueJobToGenerationJob(job: QueueJob): GenerationJob {
 
   return {
     id: job.id,
+    groupId: job.group_id,
     type: job.type,
     status: job.status === 'running' ? 'generating' : job.status === 'pending' ? 'queued' : 'idle',
     prompt: job.prompt,
@@ -50,12 +53,14 @@ export function queueJobToGenerationJob(job: QueueJob): GenerationJob {
 }
 
 export async function enqueueGeneration({
+  groupId,
   prompt,
   negativePrompt,
   selectedModel,
   capabilityValues,
   startFrame,
   endFrame,
+  videoInput,
   referenceImages,
   batchCount,
   activeMode,
@@ -81,6 +86,7 @@ export async function enqueueGeneration({
       capabilityValues,
       startFrame,
       endFrame,
+      videoInput,
       referenceImages,
       batchCount: 1,
       activeMode
@@ -90,6 +96,7 @@ export async function enqueueGeneration({
 
     const queueInput = {
       projectId: activeProjectId,
+      groupId,
       type: payload.contentType,
       prompt: payload.params.prompt,
       negativePrompt: 'negativePrompt' in payload.params ? payload.params.negativePrompt : undefined,
@@ -105,6 +112,7 @@ export async function enqueueGeneration({
       inputAssets: [
         ...(startFrame ? [{ ...startFrame, referenceType: 'start-frame' as const }] : []),
         ...(endFrame ? [{ ...endFrame, referenceType: 'end-frame' as const }] : []),
+        ...(videoInput ? [{ ...videoInput, referenceType: 'video-extend' as const }] : []),
         ...referenceImages.map((image) => ({
           ...image,
           referenceType: 'reference' as const

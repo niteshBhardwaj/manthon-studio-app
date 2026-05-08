@@ -32,7 +32,22 @@ import {
 import { AssetPickerModal } from './AssetPickerModal'
 import { MorphingDialog, MorphingDialogTrigger } from '../motion-primitives/morphing-dialog'
 
-export function PromptInput(): JSX.Element {
+interface PromptInputProps {
+  value?: string
+  onChange?: (value: string) => void
+  selectedModel?: string
+  onModelChange?: (modelId: string) => void
+  onSubmit?: () => void
+}
+
+export function PromptInput({ 
+  variant = 'default',
+  value,
+  onChange,
+  selectedModel: selectedModelProp,
+  onModelChange,
+  onSubmit
+}: PromptInputProps): JSX.Element {
   const {
     prompt,
     setPrompt,
@@ -45,6 +60,7 @@ export function PromptInput(): JSX.Element {
     extendingJobId,
     startFrame,
     endFrame,
+    videoInput,
     referenceImages,
     setContentType,
     setCapabilityValue,
@@ -70,6 +86,14 @@ export function PromptInput(): JSX.Element {
   const [assetPickerTarget, setAssetPickerTarget] = useState<'start' | 'end' | 'reference'>('reference')
   const configRef = useRef<HTMLDivElement>(null)
 
+  // ── Controlled vs Uncontrolled ─────────────────────────
+  const effectivePrompt = value !== undefined ? value : prompt
+  const handlePromptChange = onChange || setPrompt
+
+  // ── Model isolation ────────────────────────────────────
+  const effectiveSelectedModel = selectedModelProp !== undefined ? selectedModelProp : selectedModel
+  const handleModelChange = onModelChange || setSelectedModel
+
   // ── Derived state ──────────────────────────────────────
 
   const availableTypes = useMemo(() => getAvailableContentTypes(enabledModelIds), [enabledModelIds])
@@ -77,7 +101,7 @@ export function PromptInput(): JSX.Element {
     () => getModelsByContentType(contentType, enabledModelIds),
     [contentType, enabledModelIds]
   )
-  const selectedModelDescriptor = useMemo(() => getModelById(selectedModel), [selectedModel])
+  const selectedModelDescriptor = useMemo(() => getModelById(effectiveSelectedModel), [effectiveSelectedModel])
   const isExtendMode = Boolean(extendingJobId)
   const isFramesMode = contentType === 'video' && activeMode === 'frames'
   const isIngredientsMode = activeMode === 'ingredients'
@@ -164,18 +188,24 @@ export function PromptInput(): JSX.Element {
   }, [contentType, handleFileUpload, isFramesMode, isIngredientsMode])
 
   const handleGenerate = useCallback(async () => {
-    if (!prompt.trim() || !selectedModelDescriptor || isGenerating) return
+    if (onSubmit) {
+      onSubmit()
+      return
+    }
+
+    if (!effectivePrompt.trim() || !selectedModelDescriptor || isGenerating) return
 
     setIsGenerating(true)
 
     try {
       const createdJobs = await enqueueGeneration({
-        prompt,
+        prompt: effectivePrompt,
         negativePrompt,
-        selectedModel,
+        selectedModel: effectiveSelectedModel,
         capabilityValues: capabilityValues as Record<string, string | number | boolean>,
         startFrame,
         endFrame,
+        videoInput,
         referenceImages,
         batchCount: selectedModelDescriptor.contentType === 'audio' ? 1 : Math.max(1, batchCount),
         activeMode,
@@ -190,6 +220,7 @@ export function PromptInput(): JSX.Element {
       setIsGenerating(false)
     }
   }, [
+    onSubmit,
     activeMode,
     activeProjectId,
     addJob,
@@ -209,7 +240,7 @@ export function PromptInput(): JSX.Element {
   // ── Computed values ────────────────────────────────────
 
   const promptPlaceholder = useMemo(() => {
-    if (isExtendMode) return 'Describe how to continue this video...'
+    if (isExtendMode || variant === 'lightbox') return 'What happens next?'
     if (contentType === 'audio') return 'Describe the sound, score, or mood you want to create...'
     if (contentType === 'video' && activeMode === 'ingredients') {
       return 'Describe the scene and combine it with uploaded ingredients...'
@@ -230,9 +261,11 @@ export function PromptInput(): JSX.Element {
   }, [batchCount, contentType])
 
   const showPrimaryAttachmentButton =
+    variant !== 'lightbox' &&
     !isExtendMode &&
     (contentType !== 'audio' || isIngredientsMode) && !isFramesMode
   const hasAttachmentContent =
+    variant !== 'lightbox' &&
     !isExtendMode && (Boolean(startFrame) || Boolean(endFrame) || referenceImages.length > 0 || isFramesMode)
 
   useClickOutside(configRef, (event) => {
@@ -248,7 +281,12 @@ export function PromptInput(): JSX.Element {
 
   return (
     <MorphingDialog isOpen={isAssetPickerOpen} setIsOpen={setIsAssetPickerOpen}>
-      <motion.div className="absolute bottom-6 left-1/2 z-40 w-full max-w-3xl -translate-x-1/2 px-4">
+      <motion.div
+        className={cn(
+          'w-full max-w-3xl px-4',
+          variant === 'default' && 'absolute bottom-6 left-1/2 z-40 -translate-x-1/2'
+        )}
+      >
         <div className="relative">
           <motion.div
             className={cn(
@@ -279,8 +317,8 @@ export function PromptInput(): JSX.Element {
 
               <div className="relative flex w-full items-start">
                 <OptimizedTextArea
-                  initialPrompt={prompt}
-                  onPromptChange={setPrompt}
+                  initialPrompt={effectivePrompt}
+                  onPromptChange={handlePromptChange}
                   isExpanded={isExpanded}
                   setIsExpanded={setIsExpanded}
                   placeholder={promptPlaceholder}
@@ -347,7 +385,7 @@ export function PromptInput(): JSX.Element {
                             <ModelSelector
                               models={modelsForType}
                               value={selectedModelDescriptor?.id ?? ''}
-                              onChange={setSelectedModel}
+                              onChange={handleModelChange}
                             />
                           ) : null}
 
@@ -406,7 +444,7 @@ export function PromptInput(): JSX.Element {
                   ) : null}
                 </AnimatePresence>
 
-                {!isExtendMode ? (
+                {variant !== 'lightbox' ? (
                   <BottomActionBar
                     batchCount={batchCount}
                     contentType={contentType}
@@ -414,28 +452,52 @@ export function PromptInput(): JSX.Element {
                     onClick={() => setIsConfigOpen((open) => !open)}
                   />
                 ) : null}
+
+                {variant === 'lightbox' ? (
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={selectedModelDescriptor?.id ?? ''}
+                      onChange={(e) => handleModelChange(e.target.value)}
+                      className="h-9 cursor-pointer appearance-none rounded-full bg-white/10 px-4 pr-8 text-[0.85rem] font-medium text-text-primary outline-none transition-colors hover:bg-white/15 focus:ring-1 focus:ring-border"
+                      style={{
+                        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
+                        backgroundRepeat: 'no-repeat',
+                        backgroundPosition: 'right 10px center'
+                      }}
+                    >
+                      {getModelsByContentType('video', enabledModelIds)
+                        .filter((m) => m.supportsVideoExtension)
+                        .map((model) => (
+                          <option key={model.id} value={model.id} className="bg-bg-primary text-text-primary">
+                            {model.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                ) : null}
               </div>
+              
               <button
-                onClick={() => void handleGenerate()}
-                disabled={!prompt.trim() || isGenerating || !selectedModelDescriptor}
-                className={cn(
-                  'flex h-10 w-10 items-center justify-center rounded-full transition-all',
-                  prompt.trim() && selectedModelDescriptor
-                    ? 'bg-white text-black shadow-[0_4px_16px_rgba(0,0,0,0.35)]'
-                    : 'bg-bg-elevated text-text-muted',
-                  (!prompt.trim() || isGenerating || !selectedModelDescriptor) && 'cursor-not-allowed'
-                )}
-                type="button"
-              >
-                {isGenerating ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  <ArrowRight className="h-5 w-5" />
-                )}
-              </button>
+                  onClick={() => void handleGenerate()}
+                  disabled={!effectivePrompt.trim() || isGenerating || !selectedModelDescriptor}
+                  className={cn(
+                    'flex h-10 w-10 items-center justify-center rounded-full transition-all',
+                    effectivePrompt.trim() && selectedModelDescriptor
+                      ? 'bg-white text-black shadow-[0_4px_16px_rgba(0,0,0,0.35)]'
+                      : 'bg-bg-elevated text-text-muted',
+                    (!prompt.trim() || isGenerating || !selectedModelDescriptor) && 'cursor-not-allowed'
+                  )}
+                  type="button"
+                >
+                  {isGenerating ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <ArrowRight className="h-5 w-5" />
+                  )}
+                </button>
             </div>
           </motion.div>
-          {!isExtendMode ? (
+          {variant !== 'lightbox' && !isExtendMode ? (
             <SelectedOptionsDisplay
               models={modelsForType}
               activeModeDescriptor={activeModeDescriptor}

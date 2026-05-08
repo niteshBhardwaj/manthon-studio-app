@@ -10,6 +10,7 @@ interface BuildPayloadArgs {
   capabilityValues: Record<string, CapabilityValue>
   startFrame: BinaryInput | null
   endFrame: BinaryInput | null
+  videoInput: BinaryInput | null
   referenceImages: BinaryInput[]
   batchCount?: number
   activeMode?: string | null
@@ -74,6 +75,7 @@ export function buildPayload({
   capabilityValues,
   startFrame,
   endFrame,
+  videoInput,
   referenceImages,
   batchCount,
   activeMode
@@ -103,15 +105,21 @@ export function buildPayload({
       'resolution',
       asString(capabilityValues.resolution, 'Resolution')
     ) as VideoGenParams['resolution'] | undefined
-    const enableAudio = asBoolean(capabilityValues.audio_toggle, 'Audio toggle')
+    const durationSeconds = asNumber(capabilityValues.duration_seconds, 'Duration')
+    const personGeneration = assertOptionValue(
+      model,
+      'person_generation',
+      asString(capabilityValues.person_generation, 'Person Generation')
+    ) as VideoGenParams['personGeneration'] | undefined
 
     const params: VideoGenParams = {
       prompt: trimmedPrompt,
       model: model.id,
       aspectRatio,
       resolution,
-      enableAudio,
-      numberOfVideos: resolvedBatchCount
+      numberOfVideos: 1,
+      durationSeconds,
+      personGeneration
     }
 
     const normalizedNegativePrompt = negativePrompt?.trim()
@@ -119,7 +127,11 @@ export function buildPayload({
       params.negativePrompt = normalizedNegativePrompt
     }
 
-    if (activeMode === 'frames') {
+    // Video extension (true Veo extend) — overrides everything
+    if (videoInput) {
+      params.video = videoInput
+      params.resolution = '720p'
+    } else if (activeMode === 'frames') {
       if (startFrame) params.image = startFrame
       if (endFrame) params.lastFrame = endFrame
     }

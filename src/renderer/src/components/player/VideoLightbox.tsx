@@ -1,14 +1,17 @@
 import { type JSX, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Download, Sparkles, X } from 'lucide-react'
+import { Download, Film, Sparkles, X, Zap } from 'lucide-react'
 import type { GenerationJob } from '../../stores/generation-store'
 import { useGenerationStore } from '../../stores/generation-store'
 import { Button } from '../ui/button'
 import { VideoPlayer } from './VideoPlayer'
+import { PromptInput } from '../generation/PromptInput'
 import { enqueueGeneration } from '../../lib/enqueue-generation'
 import { extractFrameAtTime } from '../../lib/video-utils'
 import { useProjectStore } from '../../stores/project-store'
 import { useAppStore } from '../../stores/app-store'
+import { cn } from '../../lib/utils'
+import { getModelById } from '../../lib/model-capabilities'
 
 function formatJobConfig(job: GenerationJob): string {
   const values = job.config.capabilityValues
@@ -28,6 +31,8 @@ function getJobSrc(job: GenerationJob): string {
   return job.result.uri || ''
 }
 
+type ExtensionMode = 'extend' | 'lastframe' | null
+
 export function VideoLightbox({
   job,
   isOpen,
@@ -42,25 +47,71 @@ export function VideoLightbox({
   const { activeProjectId } = useProjectStore()
   const { addToast } = useAppStore()
   const [displayJobId, setDisplayJobId] = useState(job.id)
-  const [extendPrompt, setExtendPrompt] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const [extensionMode, setExtensionMode] = useState<'true_extend' | 'last_frame'>('true_extend')
+  const [localPrompt, setLocalPrompt] = useState('')
+  const [localModel, setLocalModel] = useState(job.model)
 
   const displayJob = useMemo(
     () => jobs.find((item) => item.id === displayJobId) ?? job,
     [displayJobId, job, jobs]
   )
 
+  const groupJobs = useMemo(() => {
+    const rootId = displayJob.groupId || displayJob.id
+    return jobs
+      .filter((j) => j.id === rootId || j.groupId === rootId)
+      .sort((a, b) => a.startedAt - b.startedAt)
+  }, [displayJob, jobs])
+
+  // Determine if the video supports true Veo extension
+  const isVeoExtendable = useMemo(() => {
+    if (displayJob.status !== 'completed') return false
+    if (displayJob.provider !== 'google-veo') return false
+    const modelDescriptor = getModelById(displayJob.model)
+    return modelDescriptor?.supportsVideoExtension === true
+  }, [displayJob.model, displayJob.provider, displayJob.status])
+
   useEffect(() => {
     if (isOpen) {
       setDisplayJobId(job.id)
-      setExtendingJobId(job.id)
-      loadJobIntoPrompt(job, { extend: true })
-    } else {
-      setExtendingJobId(null)
-      setExtendPrompt('')
+      setLocalPrompt('')
+      setLocalModel(job.model)
+
+      // Fetch siblings if this job is part of a group
+      const rootId = job.groupId || job.id
+      if (window.manthan?.listGenerations) {
+        window.manthan.listGenerations({ groupId: rootId }).then((results) => {
+          if (results && results.length > 0) {
+            // Map StoredGeneration to GenerationJob
+            const groupJobs = results.map((g) => ({
+              id: g.id,
+              groupId: g.group_id,
+              type: g.type,
+              status: g.status,
+              prompt: g.prompt,
+              negativePrompt: g.negative_prompt,
+              provider: g.provider,
+              model: g.model,
+              config: JSON.parse(g.config || '{}'),
+              result: g.result_asset_id
+                ? {
+                    type: g.type,
+                    assetId: g.result_asset_id,
+                    mimeType: g.mimeType || 'video/mp4',
+                    thumbnailPath: g.thumbnailPath
+                  }
+                : undefined,
+              progress: g.progress,
+              startedAt: g.startedAt,
+              completedAt: g.completedAt
+            }))
+            useGenerationStore.getState().addJobs(groupJobs as any)
+          }
+        })
+      }
     }
-  }, [isOpen, job, loadJobIntoPrompt, setExtendingJobId])
+  }, [isOpen, job])
 
   const handleDownload = async (): Promise<void> => {
     if (!displayJob.result || !window.manthan) return
@@ -76,8 +127,66 @@ export function VideoLightbox({
     })
   }
 
-  const handleExtend = async (): Promise<void> => {
-    if (!extendPrompt.trim() || !displayJob.result) return
+  // True Veo extension — sends full video binary
+  const handleExtendVideo = async (): Promise<void> => {
+    if (!localPrompt.trim() || !displayJob.result) return
+
+    setSubmitting(true)
+    try {
+      let videoBase64 = displayJob.result.data
+      if (!videoBase64 && displayJob.result.assetId && window.manthan?.readAsset) {
+        try {
+          videoBase64 = await window.manthan.readAsset(displayJob.result.assetId)
+        } catch (e) {
+          console.warn('Could not read asset from disk', e)
+        }
+      }
+
+      if (!videoBase64) {
+        throw new Error('Video data is unavailable for extension.')
+      }
+
+      const createdJobs = await enqueueGeneration({
+        groupId: displayJob.groupId || displayJob.id,
+        prompt: localPrompt.trim(),
+        negativePrompt: '',
+        selectedModel: localModel,
+        capabilityValues: {
+          ...displayJob.config.capabilityValues,
+          resolution: '720p',
+          batch_count: 1
+        },
+        startFrame: null,
+        endFrame: null,
+        videoInput: {
+          data: videoBase64,
+          mimeType: displayJob.result.mimeType || 'video/mp4'
+        },
+        referenceImages: [],
+        batchCount: 1,
+        activeMode: null,
+        activeProjectId
+      })
+
+      if (createdJobs[0]) {
+        useGenerationStore.getState().addJob(createdJobs[0])
+        setDisplayJobId(createdJobs[0].id)
+        setLocalPrompt('')
+      }
+    } catch (error) {
+      addToast({
+        title: 'Extension failed',
+        message: error instanceof Error ? error.message : String(error),
+        tone: 'error'
+      })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // Last frame continue — extracts last frame → image-to-video
+  const handleLastFrameContinue = async (): Promise<void> => {
+    if (!localPrompt.trim() || !displayJob.result) return
 
     const src = getJobSrc(displayJob)
     if (!src) return
@@ -95,15 +204,17 @@ export function VideoLightbox({
       })
 
       const createdJobs = await enqueueGeneration({
-        prompt: extendPrompt.trim(),
+        groupId: displayJob.groupId || displayJob.id,
+        prompt: localPrompt.trim(),
         negativePrompt: '',
-        selectedModel: displayJob.model,
+        selectedModel: localModel,
         capabilityValues: displayJob.config.capabilityValues,
-        startFrame: null,
-        endFrame: {
+        startFrame: {
           data: base64Data,
           mimeType: 'image/png'
         },
+        endFrame: null,
+        videoInput: null,
         referenceImages: [],
         batchCount: 1,
         activeMode: 'frames',
@@ -113,8 +224,7 @@ export function VideoLightbox({
       if (createdJobs[0]) {
         useGenerationStore.getState().addJob(createdJobs[0])
         setDisplayJobId(createdJobs[0].id)
-        setExtendingJobId(createdJobs[0].id)
-        setExtendPrompt('')
+        setLocalPrompt('')
       }
     } catch (error) {
       addToast({
@@ -126,6 +236,20 @@ export function VideoLightbox({
       setSubmitting(false)
     }
   }
+
+  const handleExtensionSubmit = async (): Promise<void> => {
+    if (extensionMode === 'true_extend' && isVeoExtendable) {
+      await handleExtendVideo()
+    } else {
+      await handleLastFrameContinue()
+    }
+  }
+
+  const handleClose = () => {
+    onClose()
+  }
+
+  const isCompleted = displayJob.status === 'completed'
 
   return (
     <AnimatePresence>
@@ -144,64 +268,108 @@ export function VideoLightbox({
           >
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="absolute right-5 top-5 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/35 text-white/80 backdrop-blur-md transition-colors hover:bg-black/50 hover:text-white"
             >
               <X className="h-4 w-4" />
             </button>
 
-            <div className="grid gap-6 overflow-y-auto p-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
-              <div className="space-y-5">
+            <div className="grid h-full overflow-hidden lg:grid-cols-[minmax(0,1fr)_18rem]">
+              <div className="flex flex-col gap-5 overflow-y-auto p-6">
                 <VideoPlayer
                   src={getJobSrc(displayJob)}
                   assetId={displayJob.result?.assetId}
                   mimeType={displayJob.result?.mimeType}
                   autoPlay
-                  className="aspect-video w-full"
+                  className="w-full rounded-2xl overflow-hidden aspect-video shadow-2xl bg-black"
                 />
 
-                <div className="space-y-2">
-                  <p className="text-sm leading-6 text-text-secondary">{displayJob.prompt}</p>
-                  <p className="text-xs text-text-muted">{formatJobConfig(displayJob)}</p>
+                <div className="flex flex-col gap-3 max-w-3xl mx-auto w-full">
+                  <div className="flex bg-white/5 rounded-xl p-1 gap-1 self-start mb-0.5">
+                    {isVeoExtendable ? (
+                      <button 
+                        onClick={() => setExtensionMode('true_extend')}
+                        className={cn(
+                          "px-4 py-1.5 rounded-lg text-xs font-medium transition-all",
+                          extensionMode === 'true_extend' ? "bg-white text-black shadow-sm" : "text-text-muted hover:text-text-primary"
+                        )}
+                      >
+                        Extend Video
+                      </button>
+                    ) : null}
+                    <button 
+                      onClick={() => setExtensionMode('last_frame')}
+                      className={cn(
+                        "px-4 py-1.5 rounded-lg text-xs font-medium transition-all",
+                        extensionMode === 'last_frame' ? "bg-white text-black shadow-sm" : "text-text-muted hover:text-text-primary"
+                      )}
+                    >
+                      Last Frame Extend
+                    </button>
+                  </div>
+                  <PromptInput 
+                    variant="lightbox" 
+                    value={localPrompt}
+                    onChange={setLocalPrompt}
+                    selectedModel={localModel}
+                    onModelChange={setLocalModel}
+                    onSubmit={isCompleted && !submitting ? handleExtensionSubmit : undefined}
+                  />
                 </div>
               </div>
 
-              <div className="flex flex-col gap-4">
-                <div className="rounded-[1.5rem] border border-border-subtle bg-bg-secondary/70 p-4">
-                  <div className="mb-3 text-xs font-medium uppercase tracking-[0.18em] text-text-muted">
-                    Actions
-                  </div>
-                  <div className="grid gap-2">
-                    <Button variant="outline" className="justify-start" onClick={() => inputRef.current?.focus()}>
-                      <Sparkles className="mr-2 h-4 w-4" />
-                      Extend
-                    </Button>
-                    <Button variant="outline" className="justify-start" onClick={() => void handleDownload()}>
-                      <Download className="mr-2 h-4 w-4" />
-                      Download
-                    </Button>
-                  </div>
+              <div className="flex flex-col border-l border-border bg-bg-secondary/30 w-full h-full">
+                <div className="p-5 border-b border-border/50 space-y-2">
+                   <p className="text-xs font-medium text-text-muted uppercase tracking-wider">Active Generation</p>
+                   <p className="text-xs leading-relaxed text-text-secondary line-clamp-3">{displayJob.prompt}</p>
+                   <div className="flex justify-between items-center text-[10px] text-text-muted mt-2">
+                     <span>{formatJobConfig(displayJob)}</span>
+                     <button 
+                      onClick={() => void handleDownload()} 
+                      className="hover:text-text-primary transition-colors"
+                     >
+                       <Download className="h-3.5 w-3.5" />
+                     </button>
+                   </div>
                 </div>
 
-                <div className="rounded-[1.5rem] border border-border-subtle bg-bg-secondary/70 p-4">
-                  <div className="mb-3 text-xs font-medium uppercase tracking-[0.18em] text-text-muted">
-                    Continue This Video
-                  </div>
-                  <textarea
-                    ref={inputRef}
-                    value={extendPrompt}
-                    onChange={(event) => setExtendPrompt(event.target.value)}
-                    placeholder="Describe how to continue this video..."
-                    rows={5}
-                    className="min-h-28 w-full resize-none rounded-2xl border border-border-subtle bg-bg-input px-4 py-3 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-border"
-                  />
-                  <Button
-                    className="mt-3 w-full"
-                    onClick={() => void handleExtend()}
-                    disabled={!extendPrompt.trim() || submitting || displayJob.status !== 'completed'}
-                  >
-                    {submitting ? 'Starting extension...' : 'Send'}
-                  </Button>
+                <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                  <p className="text-[11px] font-medium text-text-muted uppercase tracking-wider mb-2">Extension Timeline</p>
+                  
+                  {groupJobs.map((groupJob, index) => {
+                    const isSelected = groupJob.id === displayJobId
+                    return (
+                      <div 
+                        key={groupJob.id}
+                        onClick={() => setDisplayJobId(groupJob.id)}
+                        className={`relative group cursor-pointer rounded-xl overflow-hidden border-2 transition-all ${
+                          isSelected ? "border-amber-500/80 shadow-[0_0_15px_rgba(245,158,11,0.15)]" : "border-border/50 hover:border-white/20"
+                        }`}
+                      >
+                         <div className="aspect-video bg-black relative">
+                            {groupJob.result?.thumbnailPath ? (
+                              <img 
+                                src={`asset://${groupJob.result.thumbnailPath}`} 
+                                alt="Thumbnail" 
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-bg-elevated text-text-muted">
+                                <Film className="w-6 h-6 opacity-30" />
+                              </div>
+                            )}
+                            {groupJob.status === 'generating' ? (
+                               <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-text-muted text-xs font-medium">
+                                 Generating...
+                               </div>
+                            ) : null}
+                         </div>
+                         <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-md text-white text-[10px] px-2 py-0.5 rounded-full font-medium">
+                           Part {index + 1}
+                         </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             </div>

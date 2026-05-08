@@ -41,7 +41,17 @@ export class GoogleVeoProvider implements MediaProvider {
         name: 'Veo 3.1 Fast',
         description: 'Faster video generation with good quality',
         modality: 'video',
-        supportedInputs: ['text', 'image', 'frames'],
+        supportedInputs: ['text', 'image', 'frames', 'video'],
+        maxDuration: 8,
+        supportedAspectRatios: ['16:9', '9:16'],
+        supportedResolutions: ['720p', '1080p']
+      },
+      {
+        id: 'veo-3.1-lite-generate-preview',
+        name: 'Veo 3.1 Lite',
+        description: 'Fast, cost-effective video generation (max 1080p)',
+        modality: 'video',
+        supportedInputs: ['text', 'image'],
         maxDuration: 8,
         supportedAspectRatios: ['16:9', '9:16'],
         supportedResolutions: ['720p', '1080p']
@@ -86,13 +96,16 @@ export class GoogleVeoProvider implements MediaProvider {
   async generateVideo(params: VideoGenParams): Promise<GenerationOperation> {
     if (!this.client) throw new Error('Provider not initialized')
 
-    logger.debug('Provider', 'generateVideo() called', {
+    const isVideoExtension = !!params.video
+    logger.debug('Provider', `generateVideo() called [${isVideoExtension ? 'EXTENSION' : 'STANDARD'}]`, {
       model: params.model || this.config.defaultModel,
       prompt: params.prompt.length > 100 ? params.prompt.substring(0, 100) + '...' : params.prompt,
       aspectRatio: params.aspectRatio,
       resolution: params.resolution,
+      durationSeconds: params.durationSeconds,
+      personGeneration: params.personGeneration,
       hasImage: !!params.image,
-      hasVideo: !!params.video
+      hasVideo: isVideoExtension
     })
 
     const operationId = `veo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -111,9 +124,13 @@ export class GoogleVeoProvider implements MediaProvider {
       // Build the generation request
       const genConfig: Record<string, unknown> = {}
 
+      // Always 1 video per request (Veo hard limit)
+      genConfig.numberOfVideos = 1
+
       if (params.aspectRatio) genConfig.aspectRatio = params.aspectRatio
       if (params.resolution) genConfig.resolution = params.resolution
-      if (params.numberOfVideos) genConfig.numberOfVideos = params.numberOfVideos
+      if (params.durationSeconds) genConfig.durationSeconds = params.durationSeconds
+      if (params.personGeneration) genConfig.personGeneration = params.personGeneration
 
       // Build request params
       const requestParams: Record<string, unknown> = {
@@ -148,14 +165,17 @@ export class GoogleVeoProvider implements MediaProvider {
         }))
       }
 
-      // Video extension
-      if (params.video) {
+      // Video extension — overrides resolution to 720p
+      if (isVideoExtension) {
         requestParams.video = {
-          videoBytes: params.video.data,
-          mimeType: params.video.mimeType
+          videoBytes: params.video!.data,
+          mimeType: params.video!.mimeType
         }
-        genConfig.numberOfVideos = 1
         genConfig.resolution = '720p'
+        // Remove capabilities not applicable to extension
+        delete genConfig.durationSeconds
+        delete genConfig.personGeneration
+        logger.info('Provider', 'Video extension mode — forcing 720p, numberOfVideos=1')
       }
 
       if (Object.keys(genConfig).length > 0) {

@@ -78,6 +78,7 @@ interface ManthanAPI {
   clearHistory: () => Promise<{ success: boolean }>
   listGenerations: (options?: {
     projectId?: string | null
+    groupId?: string | null
     type?: 'video' | 'image' | 'audio'
     limit?: number
     offset?: number

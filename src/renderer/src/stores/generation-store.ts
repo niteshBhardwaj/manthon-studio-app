@@ -20,6 +20,7 @@ const defaultImageModel = getDefaultModel('image')
 
 export interface GenerationJob {
   id: string
+  groupId?: string
   type: GenerationType
   status: GenerationStatus
   prompt: string
@@ -64,6 +65,7 @@ interface GenerationState {
   // Frame inputs
   startFrame: BinaryInput | null
   endFrame: BinaryInput | null
+  videoInput: BinaryInput | null
   referenceImages: Array<BinaryInput>
 
   // Jobs
@@ -85,6 +87,7 @@ interface GenerationState {
 
   setStartFrame: (frame: BinaryInput | null) => void
   setEndFrame: (frame: BinaryInput | null) => void
+  setVideoInput: (video: BinaryInput | null) => void
   addReferenceImage: (img: BinaryInput) => void
   removeReferenceImage: (index: number) => void
   clearReferenceImages: () => void
@@ -95,6 +98,7 @@ interface GenerationState {
   setPanelExpanded: (expanded: boolean) => void
 
   addJob: (job: GenerationJob) => void
+  addJobs: (jobs: GenerationJob[]) => void
   updateJob: (id: string, updates: Partial<GenerationJob>) => void
   removeJob: (id: string) => void
   setActiveJob: (id: string | null) => void
@@ -118,6 +122,7 @@ export const useGenerationStore = create<GenerationState>((set) => ({
   // Frame inputs
   startFrame: null,
   endFrame: null,
+  videoInput: null,
   referenceImages: [],
 
   // Jobs
@@ -197,6 +202,7 @@ export const useGenerationStore = create<GenerationState>((set) => ({
 
   setStartFrame: (frame) => set({ startFrame: frame }),
   setEndFrame: (frame) => set({ endFrame: frame }),
+  setVideoInput: (video) => set({ videoInput: video }),
   addReferenceImage: (img) =>
     set((s) => ({
       referenceImages: [...s.referenceImages, img]
@@ -210,6 +216,7 @@ export const useGenerationStore = create<GenerationState>((set) => ({
     set({
       startFrame: null,
       endFrame: null,
+      videoInput: null,
       referenceImages: []
     }),
   resetPromptAfterSubmit: () =>
@@ -218,6 +225,7 @@ export const useGenerationStore = create<GenerationState>((set) => ({
       negativePrompt: '',
       startFrame: null,
       endFrame: null,
+      videoInput: null,
       referenceImages: [],
       extendingJobId: null
     }),
@@ -235,13 +243,22 @@ export const useGenerationStore = create<GenerationState>((set) => ({
       batchCount: job.config.batchCount,
       startFrame: options?.extend ? null : (job.image ?? null),
       endFrame: job.lastFrame ?? null,
+      videoInput: null,
       referenceImages: options?.extend ? [] : (job.referenceImages ?? []),
       extendingJobId: options?.extend ? job.id : null
     })),
 
   setPanelExpanded: (expanded) => set({ panelExpanded: expanded }),
 
-  addJob: (job) => set((s) => ({ jobs: [job, ...s.jobs], activeJobId: job.id })),
+  addJob: (job) => set((s) => ({ jobs: [job, ...s.jobs.filter(j => j.id !== job.id)], activeJobId: job.id })),
+  addJobs: (newJobs) =>
+    set((s) => {
+      const existingIds = new Set(s.jobs.map((j) => j.id))
+      const uniqueNewJobs = newJobs.filter((j) => !existingIds.has(j.id))
+      return {
+        jobs: [...uniqueNewJobs, ...s.jobs]
+      }
+    }),
   updateJob: (id, updates) =>
     set((s) => ({
       jobs: s.jobs.map((j) => (j.id === id ? { ...j, ...updates } : j))

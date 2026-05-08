@@ -42,6 +42,7 @@ interface ListGenerationsOptions {
 
 export interface StoredGeneration {
   id: string
+  group_id: string | null
   project_id: string | null
   type: 'video' | 'image' | 'audio'
   status: string
@@ -138,8 +139,8 @@ function migrateFromJson(): void {
       for (const op of history) {
         databaseManager.run(
           `INSERT OR IGNORE INTO generations
-            (id, project_id, type, status, prompt, provider, model, config, error, progress, started_at, completed_at, created_at)
-           VALUES (?, 'default', ?, ?, ?, ?, ?, '{}', ?, ?, ?, ?, ?)`,
+            (id, group_id, project_id, type, status, prompt, provider, model, config, error, progress, started_at, completed_at, created_at)
+           VALUES (?, NULL, 'default', ?, ?, ?, ?, ?, '{}', ?, ?, ?, ?, ?)`,
           [
             op.id ?? randomUUID(),
             op.type ?? 'video',
@@ -241,13 +242,14 @@ export const appStore = {
 
   // ── History (generations table) ────────────────────────────
 
-  addToHistory(operation: GenerationOperation & { config?: Record<string, unknown>; negativePrompt?: string }): void {
+  addToHistory(operation: GenerationOperation & { config?: Record<string, unknown>; negativePrompt?: string; groupId?: string }): void {
     databaseManager.run(
       `INSERT OR REPLACE INTO generations
-        (id, project_id, type, status, prompt, negative_prompt, provider, model, config, result_asset_id, error, progress, started_at, completed_at, starred, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, group_id, project_id, type, status, prompt, negative_prompt, provider, model, config, result_asset_id, error, progress, started_at, completed_at, starred, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         operation.id,
+        operation.groupId ?? null,
         operation.projectId ?? 'default',
         operation.type ?? 'video',
         operation.status ?? 'generating',
@@ -286,6 +288,14 @@ export const appStore = {
     if (options?.type) {
       conditions.push('type = ?')
       params.push(options.type)
+    }
+
+    if (options?.groupId) {
+      conditions.push('(group_id = ? OR id = ?)')
+      params.push(options.groupId)
+      params.push(options.groupId)
+    } else {
+      conditions.push('group_id IS NULL')
     }
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
@@ -420,6 +430,7 @@ export const appStore = {
 
 interface GenerationRow {
   id: string
+  group_id: string | null
   project_id: string | null
   type: string
   status: string

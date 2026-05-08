@@ -34,6 +34,7 @@ export interface QueueJobResult extends Partial<GenerationResult> {
 
 export interface QueueJob {
   id: string
+  group_id?: string
   project_id: string | null
   type: QueueJobType
   priority: number
@@ -63,6 +64,7 @@ export interface QueueState {
 
 export interface EnqueueJobInput {
   projectId?: string | null
+  groupId?: string
   type: QueueJobType
   priority?: number
   prompt: string

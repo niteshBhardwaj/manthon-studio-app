@@ -33,6 +33,7 @@ interface RunningJobContext {
 
 interface RawQueueJobRow {
   id: string
+  group_id: string | null
   project_id: string | null
   type: QueueJobType
   priority: number
@@ -112,11 +113,12 @@ class QueueManager {
 
     databaseManager.run(
       `INSERT INTO job_queue (
-        id, project_id, type, priority, status, prompt, negative_prompt, provider, model,
+        id, group_id, project_id, type, priority, status, prompt, negative_prompt, provider, model,
         config, input_assets, retry_count, max_retries, created_at
-      ) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
       [
         id,
+        input.groupId ?? null,
         input.projectId ?? 'default',
         input.type,
         priority,
@@ -384,6 +386,7 @@ class QueueManager {
       projectId: job.project_id ?? 'default',
       progress: 100,
       config: job.config as unknown as Record<string, unknown>,
+      groupId: job.group_id,
       resultAssetId: asset?.id,
       startedAt: job.started_at ?? job.created_at,
       completedAt,
@@ -458,8 +461,8 @@ class QueueManager {
       prompt: job.prompt,
       negativePrompt: job.negative_prompt,
       projectId: job.project_id ?? 'default',
-      progress: this.progressByJob.get(job.id) ?? 0,
       config: job.config as unknown as Record<string, unknown>,
+      groupId: job.group_id,
       error,
       startedAt: job.started_at ?? job.created_at,
       completedAt,
@@ -572,6 +575,7 @@ class QueueManager {
   private hydrate(row: RawQueueJobRow): QueueJob {
     return {
       ...row,
+      group_id: row.group_id ?? undefined,
       config: this.parseJSON(row.config, {
         contentType: row.type,
         activeMode: null,

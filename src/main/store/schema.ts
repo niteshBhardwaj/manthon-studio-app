@@ -161,5 +161,16 @@ export const MIGRATIONS: Migration[] = [
         ('neg-video-default', 'Default Video Negative', 'blurry, distorted, low quality, watermark, text overlay, flickering, jittery, artifacts', 'video', 1, strftime('%s','now') * 1000),
         ('neg-image-default', 'Default Image Negative', 'blurry, low resolution, watermark, text, deformed, bad anatomy, disfigured, poorly drawn', 'image', 1, strftime('%s','now') * 1000);
     `
+  },
+  {
+    version: 2,
+    description: 'Add group_id to generations and job_queue to track extension chains',
+    sql: `
+      ALTER TABLE generations ADD COLUMN group_id TEXT;
+      CREATE INDEX IF NOT EXISTS idx_generations_group_id ON generations(group_id);
+
+      ALTER TABLE job_queue ADD COLUMN group_id TEXT;
+      CREATE INDEX IF NOT EXISTS idx_job_queue_group_id ON job_queue(group_id);
+    `
   }
 ]

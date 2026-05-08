@@ -37,6 +37,8 @@ export interface VideoGenParams {
   aspectRatio?: '16:9' | '9:16'
   resolution?: '720p' | '1080p' | '4k'
   duration?: number
+  durationSeconds?: number
+  personGeneration?: 'allow_all' | 'allow_adult' | 'dont_allow'
   numberOfVideos?: number
   // Image inputs
   image?: { data: string; mimeType: string }
@@ -44,8 +46,6 @@ export interface VideoGenParams {
   referenceImages?: Array<{ data: string; mimeType: string; referenceType: string }>
   // Video extension
   video?: { data: string; mimeType: string }
-  // Audio
-  enableAudio?: boolean
 }
 
 export interface ImageGenParams {
