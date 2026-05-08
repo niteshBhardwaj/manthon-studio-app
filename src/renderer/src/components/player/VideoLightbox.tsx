@@ -6,7 +6,7 @@ import { useGenerationStore } from '../../stores/generation-store'
 import { VideoPlayer } from './VideoPlayer'
 import { PromptInput } from '../generation/PromptInput'
 import { enqueueGeneration } from '../../lib/enqueue-generation'
-import { extractFrameAtTime } from '../../lib/video-utils'
+import { extractFrameAtTime } from '../../lib/thumbnail-utils'
 import { useProjectStore } from '../../stores/project-store'
 import { useAppStore } from '../../stores/app-store'
 import { cn } from '../../lib/utils'
@@ -30,6 +30,41 @@ function getJobSrc(job: GenerationJob): string {
   return job.result.uri || ''
 }
 
+async function resolveJobSrc(job: GenerationJob): Promise<string> {
+  const src = getJobSrc(job)
+  if (src) return src
+
+  if (job.result?.assetId && window.manthan?.readAsset) {
+    const base64 = await window.manthan.readAsset(job.result.assetId)
+    if (base64) return `data:${job.result.mimeType || 'video/mp4'};base64,${base64}`
+  }
+
+  return ''
+}
+
+function getJobDurationSeconds(job: GenerationJob): number {
+  const resultDuration = (job.result as { duration?: unknown } | undefined)?.duration
+  if (typeof resultDuration === 'number' && resultDuration > 0) return resultDuration
+
+  const configuredDuration = job.config.capabilityValues.duration
+  if (typeof configuredDuration === 'number' && configuredDuration > 0) return configuredDuration
+  if (typeof configuredDuration === 'string') {
+    const parsed = Number(configuredDuration.replace(/[^\d.]/g, ''))
+    if (Number.isFinite(parsed) && parsed > 0) return parsed
+  }
+
+  return 10
+}
+
+function buildTimelineTimes(durationSeconds: number): number[] {
+  const duration = Math.max(0.5, durationSeconds)
+  const lastFrame = Math.max(0.1, duration - 0.05)
+  return Array.from({ length: 6 }, (_, index) => {
+    if (index === 0) return 0.1
+    return Math.min(lastFrame, (lastFrame / 5) * index)
+  })
+}
+
 export function VideoLightbox({
   job,
   isOpen,
@@ -48,6 +83,10 @@ export function VideoLightbox({
   const [extensionMode, setExtensionMode] = useState<'true_extend' | 'last_frame'>('true_extend')
   const [localPrompt, setLocalPrompt] = useState('')
   const [localModel, setLocalModel] = useState(job.model)
+  const [resolvedVideoSrc, setResolvedVideoSrc] = useState('')
+  const [timelineFrames, setTimelineFrames] = useState<Array<{ timeSeconds: number; base64: string }>>([])
+  const [timelineLoading, setTimelineLoading] = useState(false)
+  const [seekTo, setSeekTo] = useState<number | null>(null)
 
   const displayJob = useMemo(
     () => jobs.find((item) => item.id === displayJobId) ?? job,
@@ -60,6 +99,59 @@ export function VideoLightbox({
       .filter((j) => j.id === rootId || j.groupId === rootId)
       .sort((a, b) => a.startedAt - b.startedAt)
   }, [displayJob, jobs])
+
+  useEffect(() => {
+    if (!isOpen) return
+    let cancelled = false
+
+    void resolveJobSrc(displayJob)
+      .then((src) => {
+        if (!cancelled) setResolvedVideoSrc(src)
+      })
+      .catch(() => {
+        if (!cancelled) setResolvedVideoSrc('')
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [displayJob, isOpen])
+
+  useEffect(() => {
+    if (!isOpen || displayJob.status !== 'completed' || !resolvedVideoSrc) {
+      const resetTimer = window.setTimeout((): void => {
+        setTimelineFrames([])
+        setTimelineLoading(false)
+      }, 0)
+      return () => window.clearTimeout(resetTimer)
+    }
+
+    let cancelled = false
+    const times = buildTimelineTimes(getJobDurationSeconds(displayJob))
+
+    const loadTimelineFrames = async (): Promise<void> => {
+      setTimelineLoading(true)
+      setTimelineFrames([])
+
+      for (const timeSeconds of times) {
+        try {
+          const base64 = await extractFrameAtTime(resolvedVideoSrc, timeSeconds)
+          if (cancelled) return
+          setTimelineFrames((frames) => [...frames, { timeSeconds, base64 }])
+        } catch (error) {
+          console.warn('Failed to extract timeline frame', error)
+        }
+      }
+
+      if (!cancelled) setTimelineLoading(false)
+    }
+
+    void loadTimelineFrames()
+
+    return () => {
+      cancelled = true
+    }
+  }, [displayJob, isOpen, resolvedVideoSrc])
 
   // Determine if the video supports true Veo extension
   const isVeoExtendable = useMemo(() => {
@@ -200,18 +292,17 @@ export function VideoLightbox({
   const handleLastFrameContinue = async (): Promise<void> => {
     if (!localPrompt.trim() || !displayJob.result) return
 
-    const src = getJobSrc(displayJob)
+    const src = resolvedVideoSrc || (await resolveJobSrc(displayJob))
     if (!src) return
 
     setSubmitting(true)
     try {
-      const lastFrameDataUrl = await extractFrameAtTime(src, Number.MAX_SAFE_INTEGER)
-      const [, base64Data = ''] = lastFrameDataUrl.split(',')
+      const base64Data = await extractFrameAtTime(src, Number.MAX_SAFE_INTEGER)
 
       updateJob(displayJob.id, {
         lastFrame: {
           data: base64Data,
-          mimeType: 'image/png'
+          mimeType: 'image/webp'
         }
       })
 
@@ -223,7 +314,7 @@ export function VideoLightbox({
         capabilityValues: displayJob.config.capabilityValues,
         startFrame: {
           data: base64Data,
-          mimeType: 'image/png'
+          mimeType: 'image/webp'
         },
         endFrame: null,
         videoInput: null,
@@ -257,7 +348,34 @@ export function VideoLightbox({
     }
   }
 
-  const handleClose = () => {
+  const handleSeekToFrame = (timeSeconds: number): void => {
+    setSeekTo(null)
+    window.setTimeout(() => setSeekTo(timeSeconds), 0)
+  }
+
+  const handleAddFrame = async (frame: { timeSeconds: number; base64: string }): Promise<void> => {
+    if (!window.manthan) return
+
+    await window.manthan.saveAsset({
+      projectId: activeProjectId ?? undefined,
+      base64Data: frame.base64,
+      mimeType: 'image/webp',
+      filename: `frame-${Math.round(frame.timeSeconds * 10) / 10}s-${Date.now()}.webp`,
+      source: 'generated',
+      metadata: {
+        extractedFromVideo: displayJob.id,
+        timeSeconds: frame.timeSeconds
+      }
+    })
+
+    window.dispatchEvent(new CustomEvent('manthan:dashboard-refresh'))
+    addToast({
+      title: 'Frame saved to dashboard',
+      tone: 'success'
+    })
+  }
+
+  const handleClose = (): void => {
     onClose()
   }
 
@@ -289,12 +407,61 @@ export function VideoLightbox({
             <div className="grid h-full overflow-hidden lg:grid-cols-[minmax(0,1fr)_18rem]">
               <div className="flex flex-col gap-5 overflow-y-auto p-6">
                 <VideoPlayer
-                  src={getJobSrc(displayJob)}
+                  src={resolvedVideoSrc}
                   assetId={displayJob.result?.assetId}
                   mimeType={displayJob.result?.mimeType}
                   autoPlay
+                  seekTo={seekTo}
                   className="w-full rounded-2xl overflow-hidden aspect-video shadow-2xl bg-black"
                 />
+
+                {isCompleted ? (
+                  <div className="w-full overflow-hidden">
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-[11px] font-medium uppercase tracking-wider text-text-muted">
+                        Frame Timeline
+                      </p>
+                      {timelineLoading ? (
+                        <span className="text-[11px] text-text-muted">Extracting frames...</span>
+                      ) : null}
+                    </div>
+                    <div className="flex gap-2 overflow-x-auto pb-1">
+                      {timelineFrames.map((frame) => (
+                        <div
+                          key={`${displayJob.id}-${frame.timeSeconds}`}
+                          className="group/frame min-w-[7rem] overflow-hidden rounded-lg border border-white/10 bg-black/35"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => handleSeekToFrame(frame.timeSeconds)}
+                            className="relative block aspect-video w-full overflow-hidden"
+                          >
+                            <img
+                              src={`data:image/webp;base64,${frame.base64}`}
+                              alt={`${frame.timeSeconds.toFixed(1)}s`}
+                              className="h-full w-full object-cover transition-transform duration-200 group-hover/frame:scale-105"
+                            />
+                            <span className="absolute left-1.5 top-1.5 rounded bg-black/65 px-1.5 py-0.5 text-[10px] text-white/90">
+                              {frame.timeSeconds.toFixed(frame.timeSeconds < 1 ? 1 : 0)}s
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleAddFrame(frame)}
+                            className="w-full bg-white/5 px-2 py-1.5 text-[10px] font-medium text-white/75 transition-colors hover:bg-white/10 hover:text-white"
+                          >
+                            Add to Dashboard
+                          </button>
+                        </div>
+                      ))}
+                      {timelineLoading && timelineFrames.length === 0 ? (
+                        <div className="flex h-[5.6rem] min-w-[7rem] items-center justify-center rounded-lg border border-white/10 bg-white/5">
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
 
                 <div className="flex flex-col gap-3 max-w-3xl mx-auto w-full">
                   <div className="flex bg-white/5 rounded-xl p-1 gap-1 self-start mb-0.5">
@@ -361,7 +528,7 @@ export function VideoLightbox({
                          <div className="aspect-video bg-black relative">
                             {groupJob.result?.thumbnailPath ? (
                               <img 
-                                src={`asset://${groupJob.result.thumbnailPath}`} 
+                                src={`asset:///${groupJob.result.thumbnailPath.replace(/\\/g, '/')}`}
                                 alt="Thumbnail" 
                                 className="w-full h-full object-cover"
                               />

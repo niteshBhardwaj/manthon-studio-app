@@ -13,6 +13,7 @@ export interface VideoPlayerProps {
   autoPlay?: boolean
   onScreenshot?: (base64: string) => void
   onTimeUpdate?: (currentTime: number, duration: number) => void
+  seekTo?: number | null
   className?: string
   compact?: boolean
   assetId?: string
@@ -25,6 +26,7 @@ export function VideoPlayer({
   autoPlay = false,
   onScreenshot,
   onTimeUpdate,
+  seekTo,
   className,
   compact = false,
   assetId
@@ -58,7 +60,7 @@ export function VideoPlayer({
   useEffect(() => {
     let cancelled = false
 
-    const loadAsset = async () => {
+    const loadAsset = async (): Promise<void> => {
       if (!window.manthan || !assetId || src.startsWith('data:')) {
         setResolvedSrc(src)
         return
@@ -119,7 +121,7 @@ export function VideoPlayer({
   }, [loop, muted, playbackRate, volume])
 
   useEffect(() => {
-    const onFullscreenChange = () => {
+    const onFullscreenChange = (): void => {
       setIsFullscreen(document.fullscreenElement === containerRef.current)
     }
 
@@ -131,6 +133,12 @@ export function VideoPlayer({
     if (!autoPlay || compact || !resolvedSrc) return
     void videoRef.current?.play().catch(() => setIsPlaying(false))
   }, [autoPlay, compact, resolvedSrc])
+
+  useEffect(() => {
+    if (seekTo == null || !videoRef.current) return
+    videoRef.current.currentTime = seekTo
+    setCurrentTime(seekTo)
+  }, [seekTo])
 
   useEffect(() => {
     if (!compact || !isHovered || !resolvedSrc) return
@@ -362,13 +370,6 @@ export function VideoPlayer({
           </div>
         </div>
 
-        {!isPlaying ? (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/10 transition-opacity">
-            <div className="rounded-full bg-white/15 p-3 backdrop-blur-sm">
-              <Play className="ml-0.5 h-5 w-5 text-white" />
-            </div>
-          </div>
-        ) : null}
       </div>
     )
   }

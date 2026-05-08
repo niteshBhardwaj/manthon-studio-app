@@ -1,4 +1,4 @@
-import { type JSX, useCallback, useEffect, useMemo, useState } from 'react'
+import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useProjectStore } from '../../stores/project-store'
 import { useDashboardFeed, type DashboardFeedItem } from '../../hooks/useDashboardFeed'
 import { StatsStrip } from './StatsStrip'
@@ -9,10 +9,24 @@ import { useGenerationStore } from '../../stores/generation-store'
 import { useQueueStore } from '../../stores/queue-store'
 import { dashboardItemToGenerationJob } from './DashboardCard'
 import { useAppStore } from '../../stores/app-store'
+import { generateVideoThumbnailsForAssets } from '../../lib/thumbnail-utils'
 
-function buildActiveQueueItems(projectId: string, queueJobs: ReturnType<typeof useQueueStore.getState>['jobs']): DashboardFeedItem[] {
+const RECENT_COMPLETION_MS = 2000
+
+function buildActiveQueueItems(
+  projectId: string,
+  queueJobs: ReturnType<typeof useQueueStore.getState>['jobs'],
+  now: number
+): DashboardFeedItem[] {
   return queueJobs
-    .filter((job) => job.project_id === projectId && (job.status === 'pending' || job.status === 'running'))
+    .filter((job) => {
+      if (job.project_id !== projectId) return false
+      if (job.status === 'pending' || job.status === 'running') return true
+      if ((job.status === 'completed' || job.status === 'failed') && job.completed_at) {
+        return now - job.completed_at < RECENT_COMPLETION_MS
+      }
+      return false
+    })
     .map((job) => ({
       id: job.id,
       kind: 'generation' as const,
@@ -26,7 +40,14 @@ function buildActiveQueueItems(projectId: string, queueJobs: ReturnType<typeof u
         provider: job.provider,
         config: job.config as unknown as Record<string, unknown>
       },
-      status: job.status === 'pending' ? 'queued' : 'generating',
+      status:
+        job.status === 'pending'
+          ? 'queued'
+          : job.status === 'failed'
+            ? 'failed'
+            : job.status === 'completed'
+              ? 'completed'
+              : 'generating',
       progress: job.progress ?? 0,
       starred: false,
       createdAt: job.created_at
@@ -70,12 +91,68 @@ export function Dashboard(): JSX.Element {
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
   const [openItemId, setOpenItemId] = useState<string | null>(null)
   const [dragActive, setDragActive] = useState(false)
+  const [now, setNow] = useState(() => Date.now())
+  const prevCompletedQueueIdsRef = useRef<Set<string>>(new Set())
 
-  const activeItems = useMemo(() => buildActiveQueueItems(activeProjectId, queueJobs), [activeProjectId, queueJobs])
+  useEffect(() => {
+    const hasRecentCompletion = queueJobs.some(
+      (job) =>
+        job.project_id === activeProjectId &&
+        (job.status === 'completed' || job.status === 'failed') &&
+        job.completed_at &&
+        Date.now() - job.completed_at < RECENT_COMPLETION_MS
+    )
+    if (!hasRecentCompletion) return
+
+    const timer = window.setInterval(() => setNow(Date.now()), 400)
+    return () => window.clearInterval(timer)
+  }, [activeProjectId, queueJobs])
+
+  const persistedIds = useMemo(() => new Set([...items, ...pinnedItems].map((item) => item.id)), [items, pinnedItems])
+
+  const activeItems = useMemo(
+    () =>
+      buildActiveQueueItems(activeProjectId, queueJobs, now).filter((item) => !persistedIds.has(item.id)),
+    [activeProjectId, now, persistedIds, queueJobs]
+  )
   const allSelectableItems = useMemo(
     () => [...activeItems, ...visiblePinnedItems, ...visibleItems],
     [activeItems, visibleItems, visiblePinnedItems]
   )
+
+  const completedQueueIds = useMemo(
+    () =>
+      new Set(
+        queueJobs
+          .filter(
+            (job) =>
+              job.project_id === activeProjectId && (job.status === 'completed' || job.status === 'failed')
+          )
+          .map((job) => job.id)
+      ),
+    [activeProjectId, queueJobs]
+  )
+
+  useEffect(() => {
+    const newCompletions = [...completedQueueIds].filter((id) => !prevCompletedQueueIdsRef.current.has(id))
+    prevCompletedQueueIdsRef.current = completedQueueIds
+
+    if (newCompletions.length === 0) return
+
+    const timer = window.setTimeout(() => {
+      void refresh()
+    }, 500)
+    return () => window.clearTimeout(timer)
+  }, [completedQueueIds, refresh])
+
+  useEffect(() => {
+    const handleDashboardRefresh = (): void => {
+      void refresh()
+    }
+
+    window.addEventListener('manthan:dashboard-refresh', handleDashboardRefresh)
+    return () => window.removeEventListener('manthan:dashboard-refresh', handleDashboardRefresh)
+  }, [refresh])
 
   useEffect(() => {
     if (allSelectableItems.length === 0) {
@@ -90,14 +167,16 @@ export function Dashboard(): JSX.Element {
 
   const handleImport = useCallback(async () => {
     if (!window.manthan) return
-    await window.manthan.importAssets(activeProjectId)
+    const imported = await window.manthan.importAssets(activeProjectId)
+    await generateVideoThumbnailsForAssets(imported)
     await Promise.all([refresh(), loadProjects()])
   }, [activeProjectId, loadProjects, refresh])
 
   const handleDropImport = useCallback(
     async (paths: string[]) => {
       if (!window.manthan || paths.length === 0) return
-      await window.manthan.importAssetPaths(activeProjectId, paths)
+      const imported = await window.manthan.importAssetPaths(activeProjectId, paths)
+      await generateVideoThumbnailsForAssets(imported)
       addToast({
         title: 'Media imported',
         message: `${paths.length} file${paths.length === 1 ? '' : 's'} added to the project`,
@@ -143,7 +222,7 @@ export function Dashboard(): JSX.Element {
   )
 
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
+    const handleKeyDown = (event: KeyboardEvent): void => {
       const target = event.target as HTMLElement | null
       if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return
       if (allSelectableItems.length === 0) return

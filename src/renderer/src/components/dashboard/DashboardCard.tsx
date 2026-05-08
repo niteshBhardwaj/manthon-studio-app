@@ -1,8 +1,10 @@
 import { type JSX, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
+  Copy,
   Download,
   Image as ImageIcon,
+  MoreHorizontal,
   Music,
   RotateCcw,
   Star,
@@ -83,10 +85,33 @@ export function dashboardItemToGenerationJob(item: DashboardFeedItem): Generatio
   }
 }
 
-function formatSize(bytes?: number): string {
-  if (!bytes) return ''
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+function DashboardAudioThumbnailSurface({ item }: { item: DashboardFeedItem }): JSX.Element {
+  const bars = useMemo(() => {
+    const seed = item.id.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)
+    return Array.from({ length: 22 }, (_, index) => {
+      const value = Math.sin((index + seed) * 0.72) * 0.5 + Math.cos((index + seed) * 0.29) * 0.5
+      return 22 + Math.round(Math.abs(value) * 52)
+    })
+  }, [item.id])
+
+  if (item.thumbnailSrc) {
+    return <img src={item.thumbnailSrc} alt={item.title} className="h-full w-full object-cover" />
+  }
+
+  return (
+    <div className="flex h-full w-full flex-col items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_28%_18%,rgba(99,179,237,0.4),transparent_28%),linear-gradient(135deg,#182235_0%,#263b52_48%,#25403f_100%)] px-5 text-white">
+      <Music className="h-10 w-10 text-white/80 drop-shadow" />
+      <div className="mt-5 flex h-12 w-full max-w-[12rem] items-end justify-center gap-1">
+        {bars.map((height, index) => (
+          <span
+            key={`${item.id}-${index}`}
+            className="w-1 rounded-full bg-white/55"
+            style={{ height: `${height}%` }}
+          />
+        ))}
+      </div>
+    </div>
+  )
 }
 
 function DashboardVideoSurface({
@@ -132,7 +157,7 @@ function DashboardAudioSurface({
   useEffect(() => {
     let cancelled = false
 
-    const loadAudio = async () => {
+    const loadAudio = async (): Promise<void> => {
       if (!window.manthan || !assetId) return
       const base64 = await window.manthan.readAsset(assetId)
       if (!cancelled && base64) {
@@ -249,32 +274,48 @@ export function DashboardCard({
 }): JSX.Element {
   const isGenerating = item.status === 'generating' || item.status === 'queued'
   const isFailed = item.status === 'failed'
+  const [menuOpen, setMenuOpen] = useState(false)
 
   const typeIcon =
     item.type === 'video' ? (
-      <Video className="h-3.5 w-3.5" />
+      <Video className="h-4 w-4" />
     ) : item.type === 'audio' ? (
-      <Music className="h-3.5 w-3.5" />
+      <Music className="h-4 w-4" />
     ) : (
-      <ImageIcon className="h-3.5 w-3.5" />
+      <ImageIcon className="h-4 w-4" />
     )
+
+  const copyPrompt = async (): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(item.title)
+    } catch (error) {
+      console.warn('Failed to copy prompt', error)
+    }
+  }
 
   return (
     <>
-      <motion.button
-        type="button"
+      <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
+        role="button"
+        tabIndex={0}
         onClick={() => {
           onSelect()
           if (!isGenerating) onOpen()
         }}
+        onKeyDown={(event) => {
+          if (event.key !== 'Enter' && event.key !== ' ') return
+          event.preventDefault()
+          onSelect()
+          if (!isGenerating) onOpen()
+        }}
         className={cn(
-          'group relative flex w-full flex-col overflow-hidden rounded-xl border bg-bg-elevated text-left transition-all',
+          'group relative aspect-[4/3] w-full cursor-pointer overflow-hidden rounded-xl border bg-bg-secondary text-left transition-all',
           selected ? 'border-accent shadow-[0_0_0_1px_rgba(90,184,255,0.25)]' : 'border-border-subtle hover:border-border'
         )}
       >
-        <div className={cn('relative overflow-hidden bg-bg-secondary', item.type === 'audio' ? 'h-28' : 'aspect-video')}>
+        <div className="absolute inset-0">
           {item.type === 'video' ? (
             <DashboardVideoSurface item={item} compact className="h-full w-full" />
           ) : item.type === 'image' ? (
@@ -284,101 +325,141 @@ export function DashboardCard({
               className="h-full w-full object-cover"
             />
           ) : (
-            <DashboardAudioSurface item={item} compact className="h-full w-full" />
+            <DashboardAudioThumbnailSurface item={item} />
           )}
+        </div>
 
-          {isGenerating ? (
-            <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/80 via-black/25 to-transparent p-3">
-              <div className="mb-2 h-1.5 overflow-hidden rounded-full bg-white/10">
-                <div className="h-full rounded-full bg-accent" style={{ width: `${Math.max(4, item.progress)}%` }} />
-              </div>
-              <div className="text-[11px] font-medium text-white/85">{Math.round(item.progress)}%</div>
+        {isGenerating ? (
+          <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/85 via-black/25 to-transparent p-3">
+            <div className="mb-2 h-1.5 overflow-hidden rounded-full bg-white/10">
+              <div className="h-full rounded-full bg-accent" style={{ width: `${Math.max(4, item.progress)}%` }} />
             </div>
-          ) : null}
-
-          {isFailed ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/60 px-3 text-center text-[11px] text-red-300">
-              {item.generation?.error ?? 'Generation failed'}
-            </div>
-          ) : null}
-
-          <div className="absolute left-2 top-2 rounded-full bg-black/45 px-2 py-1 text-[10px] text-white/85 backdrop-blur-md">
-            <span className="inline-flex items-center gap-1.5">
-              {typeIcon}
-              {item.type}
-            </span>
+            <div className="text-[11px] font-medium text-white/85">{Math.round(item.progress)}%</div>
           </div>
+        ) : null}
 
-          <div className="absolute right-2 top-2 rounded-full bg-black/45 px-2 py-1 text-[10px] capitalize text-white/80 backdrop-blur-md">
-            {item.kind === 'generation' ? 'Generated' : item.source}
+        {isFailed ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/65 px-3 text-center text-[11px] text-red-300">
+            {item.generation?.error ?? 'Generation failed'}
           </div>
+        ) : null}
+
+        <div className="pointer-events-none absolute bottom-2 right-2 z-20 text-white/85 drop-shadow-[0_1px_6px_rgba(0,0,0,0.9)]">
+          {typeIcon}
+        </div>
+
+        <div
+          className={cn(
+            'absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-black/20 opacity-0 transition-opacity duration-200',
+            menuOpen ? 'opacity-100' : 'group-hover:opacity-100'
+          )}
+        >
+          <button
+            type="button"
+            aria-label="Open media actions"
+            onClick={(event) => {
+              event.stopPropagation()
+              setMenuOpen((open) => !open)
+            }}
+            className={cn(
+              'absolute left-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/35 text-white/80 backdrop-blur-md transition-all hover:bg-black/50 hover:text-white group-hover:opacity-100',
+              menuOpen ? 'opacity-100' : 'opacity-0'
+            )}
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </button>
 
           {item.kind === 'generation' ? (
             <button
               type="button"
+              aria-label={item.starred ? 'Unstar media' : 'Star media'}
               onClick={(event) => {
                 event.stopPropagation()
                 onToggleStar()
               }}
               className={cn(
-                'absolute bottom-2 left-2 flex h-7 w-7 items-center justify-center rounded-full backdrop-blur-md transition-colors',
-                item.starred ? 'bg-amber-400/20 text-amber-300' : 'bg-black/45 text-white/65 hover:text-white'
+                'absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/35 backdrop-blur-md transition-all hover:bg-black/50 group-hover:opacity-100',
+                menuOpen ? 'opacity-100' : 'opacity-0',
+                item.starred ? 'text-amber-300' : 'text-white/80 hover:text-white'
               )}
             >
-              <Star className={cn('h-3.5 w-3.5', item.starred ? 'fill-current' : '')} />
+              <Star className={cn('h-4 w-4', item.starred ? 'fill-current' : '')} />
             </button>
           ) : null}
 
-          <div className="absolute bottom-2 right-2 rounded-full bg-black/45 px-2 py-1 text-[10px] text-white/80 backdrop-blur-md">
-            {item.type === 'audio'
-              ? formatSize(item.metadata.sizeBytes)
-              : item.metadata.duration
-                ? `${item.metadata.duration}s`
-                : formatSize(item.metadata.sizeBytes)}
-          </div>
+          <p className="absolute bottom-2 left-2 right-9 truncate text-xs font-medium text-white/90">
+            {item.title}
+          </p>
         </div>
 
-        <div className="space-y-2 p-3">
-          <p className="line-clamp-2 text-xs leading-5 text-text-secondary">{item.title}</p>
-          <div className="flex items-center justify-between gap-2">
-            <span className="truncate text-[11px] text-text-muted">{formatMetadata(item)}</span>
-            <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        {menuOpen ? (
+          <div
+            className="absolute left-2 top-11 z-30 w-44 overflow-hidden rounded-lg border border-white/10 bg-[#111722]/95 py-1 text-xs text-white/85 shadow-2xl backdrop-blur-xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setMenuOpen(false)
+                onDownload()
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-white/10"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Download
+            </button>
+            {item.kind === 'generation' && onRerun ? (
               <button
                 type="button"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onDownload()
+                onClick={() => {
+                  setMenuOpen(false)
+                  onRerun()
                 }}
-                className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-bg-hover hover:text-text-secondary"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-white/10"
               >
-                <Download className="h-3.5 w-3.5" />
+                <RotateCcw className="h-3.5 w-3.5" />
+                Re-run
               </button>
-              {item.kind === 'generation' && onRerun ? (
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onRerun()
-                  }}
-                  className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-bg-hover hover:text-text-secondary"
-                >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                </button>
-              ) : null}
+            ) : null}
+            <button
+              type="button"
+              onClick={() => {
+                setMenuOpen(false)
+                void copyPrompt()
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-white/10"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              Copy prompt
+            </button>
+            {item.kind === 'generation' ? (
               <button
                 type="button"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onDelete()
+                onClick={() => {
+                  setMenuOpen(false)
+                  onToggleStar()
                 }}
-                className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-red-500/10 hover:text-red-400"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-white/10"
               >
-                <Trash2 className="h-3.5 w-3.5" />
+                <Star className={cn('h-3.5 w-3.5', item.starred ? 'fill-current text-amber-300' : '')} />
+                {item.starred ? 'Unstar' : 'Star'}
               </button>
-            </div>
+            ) : null}
+            <div className="my-1 h-px bg-white/10" />
+            <button
+              type="button"
+              onClick={() => {
+                setMenuOpen(false)
+                onDelete()
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-red-300 transition-colors hover:bg-red-500/10"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete
+            </button>
           </div>
-        </div>
-      </motion.button>
+        ) : null}
+      </motion.div>
 
       <FeedItemModal item={item} isOpen={isOpen} onClose={onClose} />
     </>

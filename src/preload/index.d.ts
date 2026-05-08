@@ -144,6 +144,11 @@ interface ManthanAPI {
   }) => Promise<{ assets: AssetInfo[]; total: number; typeCounts: Record<string, number> }>
   getAsset: (id: string) => Promise<AssetInfo | null>
   readAsset: (id: string) => Promise<string | null>
+  generateThumbnail: (
+    assetId: string,
+    base64Thumbnail: string,
+    mimeType?: string
+  ) => Promise<string | null>
   deleteAsset: (id: string) => Promise<boolean>
   importAssets: (projectId?: string) => Promise<AssetInfo[]>
   importAssetPaths: (projectId: string | undefined, paths: string[]) => Promise<AssetInfo[]>

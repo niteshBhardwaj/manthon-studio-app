@@ -155,12 +155,21 @@ export class GoogleLyriaProvider implements MediaProvider {
 
       let audioData = ''
       let audioMimeType = fallbackMimeType
+      let coverArt: { data: string; mimeType: string } | null = null
 
       // Lyria returns the generated media as inline audio bytes.
       for (const part of parts) {
         if (part.inlineData) {
-          audioData = part.inlineData.data || ''
-          audioMimeType = part.inlineData.mimeType || fallbackMimeType
+          const inlineMimeType = part.inlineData.mimeType || fallbackMimeType
+          if (inlineMimeType.startsWith('audio/')) {
+            audioData = part.inlineData.data || ''
+            audioMimeType = inlineMimeType
+          } else if (inlineMimeType.startsWith('image/')) {
+            coverArt = {
+              data: part.inlineData.data || '',
+              mimeType: inlineMimeType
+            }
+          }
         }
       }
 
@@ -172,7 +181,8 @@ export class GoogleLyriaProvider implements MediaProvider {
         type: 'audio',
         data: audioData,
         mimeType: audioMimeType,
-        duration: params.duration || (isPro ? 60 : 30)
+        duration: params.duration || (isPro ? 60 : 30),
+        ...(coverArt ? { metadata: { coverArt } } : {})
       }
     } catch (error: unknown) {
       logger.error('Provider', 'generateAudio() failed', { error: error instanceof Error ? error.message : 'Unknown' })

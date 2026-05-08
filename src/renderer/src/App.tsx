@@ -15,6 +15,7 @@ import type {
 } from '../../main/queue/types'
 import { queueJobToGenerationJob } from './lib/enqueue-generation'
 import { useAppStore } from './stores/app-store'
+import { extractVideoThumbnail } from './lib/thumbnail-utils'
 
 function isProtectedGoogleMediaUri(uri?: string): boolean {
   return Boolean(uri?.includes('generativelanguage.googleapis.com/download/'))
@@ -85,6 +86,43 @@ function App(): JSX.Element {
               ? await window.manthan.readAsset(payload.result.assetId)
               : null) ||
             ''
+          let thumbnailPath = payload.result.thumbnailPath ?? null
+
+          if (payload.job.type === 'video' && payload.result.assetId && !thumbnailPath) {
+            const mimeType = payload.result.mimeType || 'video/mp4'
+            const primaryVideoSrc = localAssetUri || (base64Data ? `data:${mimeType};base64,${base64Data}` : '')
+            const sources = primaryVideoSrc ? [primaryVideoSrc] : []
+
+            for (const videoSrc of sources) {
+              try {
+                const thumbnail = await extractVideoThumbnail(videoSrc)
+                thumbnailPath = await window.manthan.generateThumbnail(
+                  payload.result.assetId,
+                  thumbnail,
+                  'image/webp'
+                )
+                break
+              } catch (error) {
+                console.warn('Failed to persist video thumbnail', error)
+              }
+            }
+
+            if (!thumbnailPath && !primaryVideoSrc.startsWith('data:')) {
+              const fallbackBase64 = await window.manthan.readAsset(payload.result.assetId)
+              if (fallbackBase64) {
+                try {
+                  const thumbnail = await extractVideoThumbnail(`data:${mimeType};base64,${fallbackBase64}`)
+                  thumbnailPath = await window.manthan.generateThumbnail(
+                    payload.result.assetId,
+                    thumbnail,
+                    'image/webp'
+                  )
+                } catch (error) {
+                  console.warn('Failed to persist video thumbnail from fallback data', error)
+                }
+              }
+            }
+          }
 
           const generationJob = {
             ...queueJobToGenerationJob(payload.job),
@@ -96,7 +134,8 @@ function App(): JSX.Element {
               data: localAssetUri ? '' : base64Data,
               mimeType: payload.result.mimeType || 'application/octet-stream',
               uri: localAssetUri ?? (isProtectedGoogleMediaUri(payload.result.uri) ? undefined : payload.result.uri),
-              assetId: payload.result.assetId
+              assetId: payload.result.assetId,
+              thumbnailPath
             }
           }
 
@@ -115,6 +154,7 @@ function App(): JSX.Element {
             tone: 'success'
           })
           setHistoryHasUpdates(true)
+          window.dispatchEvent(new CustomEvent('manthan:dashboard-refresh'))
 
           if (document.hidden && useAppStore.getState().playCompletionSound) {
             playCompletionChime()

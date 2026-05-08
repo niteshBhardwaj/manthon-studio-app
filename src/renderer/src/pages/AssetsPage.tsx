@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
 import { cn } from '../lib/utils'
+import { generateVideoThumbnailsForAssets } from '../lib/thumbnail-utils'
 import { useProjectStore } from '../stores/project-store'
 import { VideoPlayer } from '../components/player/VideoPlayer'
 import { AudioPlayer } from '../components/player/AudioPlayer'
@@ -385,7 +386,8 @@ export function AssetsPage() {
   // Import handler
   const handleImport = async () => {
     if (!window.manthan) return
-    await window.manthan.importAssets(activeProjectId)
+    const imported = await window.manthan.importAssets(activeProjectId)
+    await generateVideoThumbnailsForAssets(imported)
     loadAssets()
   }
 

@@ -496,7 +496,7 @@ class QueueManager {
   private async persistResultAsset(job: QueueJob, result: QueueJobResult): Promise<Asset | null> {
     try {
       if (result.data && result.mimeType) {
-        return await assetManager.saveBase64Asset({
+        const asset = await assetManager.saveBase64Asset({
           projectId: job.project_id,
           base64Data: result.data,
           mimeType: result.mimeType,
@@ -510,6 +510,7 @@ class QueueManager {
             resultMetadata: result.metadata ?? {}
           }
         })
+        return await this.attachCoverArtThumbnail(asset, result)
       }
 
       if (result.uri) {
@@ -521,7 +522,7 @@ class QueueManager {
         const arrayBuffer = await response.arrayBuffer()
         const mimeType = response.headers.get('content-type') || result.mimeType || 'video/mp4'
 
-        return await assetManager.saveAsset({
+        const asset = await assetManager.saveAsset({
           projectId: job.project_id,
           buffer: Buffer.from(arrayBuffer),
           mimeType,
@@ -536,12 +537,33 @@ class QueueManager {
             resultMetadata: result.metadata ?? {}
           }
         })
+        return await this.attachCoverArtThumbnail(asset, result)
       }
     } catch (error) {
       logger.error('Queue', `Failed to persist asset for ${job.id}`, { error })
     }
 
     return null
+  }
+
+  private async attachCoverArtThumbnail(asset: Asset, result: QueueJobResult): Promise<Asset> {
+    const coverArt = result.metadata?.coverArt
+    if (
+      asset.type !== 'audio' ||
+      typeof coverArt !== 'object' ||
+      coverArt === null ||
+      !('data' in coverArt) ||
+      !('mimeType' in coverArt)
+    ) {
+      return asset
+    }
+
+    const data = String((coverArt as { data?: unknown }).data ?? '')
+    const mimeType = String((coverArt as { mimeType?: unknown }).mimeType ?? 'image/webp')
+    if (!data || !mimeType.startsWith('image/')) return asset
+
+    await assetManager.saveThumbnail(asset.id, data, mimeType)
+    return assetManager.getAsset(asset.id) ?? asset
   }
 
   private buildFilename(job: QueueJob, mimeType: string, uri?: string): string {

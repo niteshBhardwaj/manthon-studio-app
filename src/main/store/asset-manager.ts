@@ -67,12 +67,15 @@ const MIME_TO_EXT: Record<string, string> = {
 class AssetManager {
   private assetsRoot: string = ''
   private cacheRoot: string = ''
+  private thumbnailsRoot: string = ''
 
   initialize(): void {
     this.assetsRoot = join(app.getPath('userData'), 'assets')
     this.cacheRoot = join(app.getPath('userData'), 'cache')
+    this.thumbnailsRoot = join(this.assetsRoot, 'thumbnails')
     mkdirSync(this.assetsRoot, { recursive: true })
     mkdirSync(this.cacheRoot, { recursive: true })
+    mkdirSync(this.thumbnailsRoot, { recursive: true })
   }
 
   /** Save a buffer as a managed asset */
@@ -264,6 +267,35 @@ class AssetManager {
 
     const data = await readFile(asset.storage_path)
     return data.toString('base64')
+  }
+
+  /** Save a renderer-generated thumbnail and attach it to an asset row */
+  async saveThumbnail(
+    assetId: string,
+    base64Thumbnail: string,
+    mimeType: string = 'image/webp'
+  ): Promise<string | null> {
+    const asset = this.getAsset(assetId)
+    if (!asset) return null
+
+    mkdirSync(this.thumbnailsRoot, { recursive: true })
+
+    const ext = MIME_TO_EXT[mimeType] ?? '.webp'
+    const thumbnailPath = join(this.thumbnailsRoot, `${assetId}${ext}`)
+    const normalizedBase64 = base64Thumbnail.includes(',')
+      ? base64Thumbnail.split(',').pop() ?? ''
+      : base64Thumbnail
+
+    await writeFile(thumbnailPath, Buffer.from(normalizedBase64, 'base64'))
+
+    databaseManager.run('UPDATE assets SET thumbnail_path = ?, updated_at = ? WHERE id = ?', [
+      thumbnailPath,
+      Date.now(),
+      assetId
+    ])
+
+    logger.debug('Asset', `Thumbnail saved for asset: ${assetId}`)
+    return thumbnailPath
   }
 
   /** Get storage breakdown by media type */

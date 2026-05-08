@@ -98,6 +98,8 @@ const manthanAPI = {
   }) => ipcRenderer.invoke('asset:list', options),
   getAsset: (id: string) => ipcRenderer.invoke('asset:get', id),
   readAsset: (id: string) => ipcRenderer.invoke('asset:read', id),
+  generateThumbnail: (assetId: string, base64Thumbnail: string, mimeType?: string) =>
+    ipcRenderer.invoke('asset:generate-thumbnail', assetId, base64Thumbnail, mimeType),
   deleteAsset: (id: string) => ipcRenderer.invoke('asset:delete', id),
   importAssets: (projectId?: string) => ipcRenderer.invoke('asset:import', projectId),
   importAssetPaths: (projectId: string | undefined, paths: string[]) =>

@@ -390,6 +390,13 @@ export function registerIpcHandlers(): void {
     return assetManager.readAssetBase64(id)
   })
 
+  logIpcHandler(
+    'asset:generate-thumbnail',
+    async (_event, assetId: string, base64Thumbnail: string, mimeType?: string) => {
+      return assetManager.saveThumbnail(assetId, base64Thumbnail, mimeType)
+    }
+  )
+
   logIpcHandler('asset:delete', async (_event, id: string) => {
     return assetManager.deleteAsset(id)
   })
