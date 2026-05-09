@@ -271,6 +271,7 @@ export function Dashboard(): JSX.Element {
   }, [allSelectableItems, handleDelete, handleDownload, selectedItemId, toggleStar])
 
   const hasAnyContent = activeItems.length > 0 || pinnedItems.length > 0 || items.length > 0
+  const projectHasContent = totalCount > 0 || activeItems.length > 0
 
   return (
     <div
@@ -302,7 +303,7 @@ export function Dashboard(): JSX.Element {
         <div className="pointer-events-none absolute inset-0 z-30 rounded-2xl border-2 border-dashed border-accent bg-accent/8" />
       ) : null}
 
-      {hasAnyContent ? (
+      {projectHasContent ? (
         <section className="space-y-2 rounded-2xl border border-white/8 bg-[linear-gradient(180deg,rgba(14,20,31,0.96),rgba(10,15,24,0.9))] p-3 shadow-[0_18px_50px_rgba(0,0,0,0.18)]">
           <StatsStrip
             stats={stats}
@@ -333,8 +334,25 @@ export function Dashboard(): JSX.Element {
         <div className="flex min-h-[18rem] items-center justify-center">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
         </div>
-      ) : !hasAnyContent ? (
+      ) : !projectHasContent ? (
         <WelcomeState onImport={() => void handleImport()} />
+      ) : !hasAnyContent ? (
+        <div className="flex min-h-[18rem] flex-col items-center justify-center gap-2 text-white/50">
+          <p>No media found matching your search or filters.</p>
+          <button
+            type="button"
+            onClick={() => {
+              setSearchQuery('')
+              setSourceFilter('all')
+              setTypeFilter('all')
+              setStatusFilter('all')
+              setStarredOnly(false)
+            }}
+            className="mt-2 text-sm text-accent hover:underline transition-colors"
+          >
+            Clear all filters
+          </button>
+        </div>
       ) : (
         <div className="space-y-6">
           {activeItems.length > 0 ? (
