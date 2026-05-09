@@ -108,11 +108,13 @@ function MediaAudioSurface({
   job,
   compact = false,
   autoPlay = false,
+  isHovered = false,
   className
 }: {
   job: GenerationJob
   compact?: boolean
   autoPlay?: boolean
+  isHovered?: boolean
   className?: string
 }): JSX.Element {
   const [resolvedSrc, setResolvedSrc] = useState<string>(getJobSrc(job))
@@ -143,10 +145,12 @@ function MediaAudioSurface({
 
   return (
     <AudioPlayer
+      id={job.id}
       src={resolvedSrc}
       mimeType={job.result?.mimeType}
       compact={compact}
       autoPlay={autoPlay}
+      isHovered={isHovered}
       className={className}
     />
   )
@@ -162,6 +166,7 @@ function MediaCard({ job }: { job: GenerationJob }): JSX.Element {
   const isGenerating = job.status === 'generating' || job.status === 'queued'
   const isCompleted = job.status === 'completed'
   const isFailed = job.status === 'failed'
+  const [isHovered, setIsHovered] = useState(false)
 
   useEffect(() => {
     if (!isGenerating) return
@@ -199,6 +204,8 @@ function MediaCard({ job }: { job: GenerationJob }): JSX.Element {
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
         <Tilt rotationFactor={8} isRevese>
           <div
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
             className={cn(
               'group relative overflow-hidden rounded-[1.25rem] border bg-bg-elevated transition-all',
               isGenerating
@@ -272,10 +279,11 @@ function MediaCard({ job }: { job: GenerationJob }): JSX.Element {
                         assetId={job.result.assetId}
                         mimeType={job.result.mimeType}
                         compact
+                        isHovered={isHovered}
                         className="h-full w-full"
                       />
                     ) : job.type === 'audio' ? (
-                      <MediaAudioSurface job={job} compact className="h-full w-full" />
+                      <MediaAudioSurface job={job} compact isHovered={isHovered} className="h-full w-full" />
                     ) : (
                       <img
                         src={`data:${job.result.mimeType};base64,${job.result.data}`}
@@ -295,7 +303,7 @@ function MediaCard({ job }: { job: GenerationJob }): JSX.Element {
                   </div>
                 ) : null}
 
-                <div className="absolute left-3 top-3 rounded-full bg-black/45 px-2.5 py-1 text-[10px] text-white/85 backdrop-blur-md">
+                <div className="pointer-events-none absolute left-3 top-3 rounded-full bg-black/45 px-2.5 py-1 text-[10px] text-white/85 backdrop-blur-md">
                   <span className="inline-flex items-center gap-1.5">
                     {typeIcon}
                     {job.type}
@@ -303,7 +311,7 @@ function MediaCard({ job }: { job: GenerationJob }): JSX.Element {
                 </div>
 
                 {job.type === 'video' && !isGenerating ? (
-                  <div className="absolute bottom-3 right-3 rounded-full bg-black/50 px-2.5 py-1 text-[10px] text-white/80 backdrop-blur-md">
+                  <div className="pointer-events-none absolute bottom-3 right-3 rounded-full bg-black/50 px-2.5 py-1 text-[10px] text-white/80 backdrop-blur-md">
                     {typeof job.config.capabilityValues.duration === 'number'
                       ? job.config.capabilityValues.duration
                       : 8}

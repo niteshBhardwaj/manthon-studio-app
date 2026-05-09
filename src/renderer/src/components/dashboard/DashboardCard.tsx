@@ -85,44 +85,19 @@ export function dashboardItemToGenerationJob(item: DashboardFeedItem): Generatio
   }
 }
 
-function DashboardAudioThumbnailSurface({ item }: { item: DashboardFeedItem }): JSX.Element {
-  const bars = useMemo(() => {
-    const seed = item.id.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)
-    return Array.from({ length: 22 }, (_, index) => {
-      const value = Math.sin((index + seed) * 0.72) * 0.5 + Math.cos((index + seed) * 0.29) * 0.5
-      return 22 + Math.round(Math.abs(value) * 52)
-    })
-  }, [item.id])
 
-  if (item.thumbnailSrc) {
-    return <img src={item.thumbnailSrc} alt={item.title} className="h-full w-full object-cover" />
-  }
-
-  return (
-    <div className="flex h-full w-full flex-col items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_28%_18%,rgba(99,179,237,0.4),transparent_28%),linear-gradient(135deg,#182235_0%,#263b52_48%,#25403f_100%)] px-5 text-white">
-      <Music className="h-10 w-10 text-white/80 drop-shadow" />
-      <div className="mt-5 flex h-12 w-full max-w-[12rem] items-end justify-center gap-1">
-        {bars.map((height, index) => (
-          <span
-            key={`${item.id}-${index}`}
-            className="w-1 rounded-full bg-white/55"
-            style={{ height: `${height}%` }}
-          />
-        ))}
-      </div>
-    </div>
-  )
-}
 
 function DashboardVideoSurface({
   item,
   compact = false,
   autoPlay = false,
+  isHovered = false,
   className
 }: {
   item: DashboardFeedItem
   compact?: boolean
   autoPlay?: boolean
+  isHovered?: boolean
   className?: string
 }): JSX.Element {
   const assetId = item.asset?.id ?? item.metadata.resultAssetId ?? undefined
@@ -135,6 +110,7 @@ function DashboardVideoSurface({
       poster={item.thumbnailSrc ?? undefined}
       compact={compact}
       autoPlay={autoPlay}
+      isHovered={isHovered}
       className={className}
     />
   )
@@ -144,11 +120,13 @@ function DashboardAudioSurface({
   item,
   compact = false,
   autoPlay = false,
+  isHovered = false,
   className
 }: {
   item: DashboardFeedItem
   compact?: boolean
   autoPlay?: boolean
+  isHovered?: boolean
   className?: string
 }): JSX.Element {
   const assetId = item.asset?.id ?? item.metadata.resultAssetId ?? null
@@ -175,10 +153,12 @@ function DashboardAudioSurface({
 
   return (
     <AudioPlayer
+      id={item.id}
       src={resolvedSrc ?? ''}
       mimeType={item.asset?.mime_type}
       compact={compact}
       autoPlay={autoPlay}
+      isHovered={isHovered}
       className={className}
     />
   )
@@ -275,6 +255,7 @@ export function DashboardCard({
   const isGenerating = item.status === 'generating' || item.status === 'queued'
   const isFailed = item.status === 'failed'
   const [menuOpen, setMenuOpen] = useState(false)
+  const [isHovered, setIsHovered] = useState(false)
 
   const typeIcon =
     item.type === 'video' ? (
@@ -310,6 +291,8 @@ export function DashboardCard({
           onSelect()
           if (!isGenerating) onOpen()
         }}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
         className={cn(
           'group relative aspect-[4/3] w-full cursor-pointer overflow-hidden rounded-xl border bg-bg-secondary text-left transition-all',
           selected ? 'border-accent shadow-[0_0_0_1px_rgba(90,184,255,0.25)]' : 'border-border-subtle hover:border-border'
@@ -317,7 +300,7 @@ export function DashboardCard({
       >
         <div className="absolute inset-0">
           {item.type === 'video' ? (
-            <DashboardVideoSurface item={item} compact className="h-full w-full" />
+            <DashboardVideoSurface item={item} compact isHovered={isHovered} className="h-full w-full" />
           ) : item.type === 'image' ? (
             <img
               src={item.thumbnailSrc ?? item.previewSrc ?? ''}
@@ -325,7 +308,7 @@ export function DashboardCard({
               className="h-full w-full object-cover"
             />
           ) : (
-            <DashboardAudioThumbnailSurface item={item} />
+            <DashboardAudioSurface item={item} compact isHovered={isHovered} />
           )}
         </div>
 
@@ -344,13 +327,16 @@ export function DashboardCard({
           </div>
         ) : null}
 
-        <div className="pointer-events-none absolute bottom-2 right-2 z-20 text-white/85 drop-shadow-[0_1px_6px_rgba(0,0,0,0.9)]">
+        <div className={cn(
+          "pointer-events-none absolute bottom-2 right-2 z-20 text-white/85 drop-shadow-[0_1px_6px_rgba(0,0,0,0.9)] transition-opacity duration-200",
+          ((item.type === 'audio' || item.type === 'video') && isHovered) ? "opacity-0" : "opacity-100"
+        )}>
           {typeIcon}
         </div>
 
         <div
           className={cn(
-            'absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-black/20 opacity-0 transition-opacity duration-200',
+            'absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-black/20 opacity-0 transition-opacity duration-200 pointer-events-none',
             menuOpen ? 'opacity-100' : 'group-hover:opacity-100'
           )}
         >
@@ -362,7 +348,7 @@ export function DashboardCard({
               setMenuOpen((open) => !open)
             }}
             className={cn(
-              'absolute left-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/35 text-white/80 backdrop-blur-md transition-all hover:bg-black/50 hover:text-white group-hover:opacity-100',
+              'absolute left-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/35 text-white/80 backdrop-blur-md transition-all hover:bg-black/50 hover:text-white group-hover:opacity-100 pointer-events-auto',
               menuOpen ? 'opacity-100' : 'opacity-0'
             )}
           >
@@ -378,7 +364,7 @@ export function DashboardCard({
                 onToggleStar()
               }}
               className={cn(
-                'absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/35 backdrop-blur-md transition-all hover:bg-black/50 group-hover:opacity-100',
+                'absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/35 backdrop-blur-md transition-all hover:bg-black/50 group-hover:opacity-100 pointer-events-auto',
                 menuOpen ? 'opacity-100' : 'opacity-0',
                 item.starred ? 'text-amber-300' : 'text-white/80 hover:text-white'
               )}

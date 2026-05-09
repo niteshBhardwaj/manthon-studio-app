@@ -1,20 +1,25 @@
-import { type JSX, useCallback, useEffect, useRef, useState } from 'react'
-import { Play, Pause, Volume2, VolumeX } from 'lucide-react'
+import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Play, Pause, Volume2, VolumeX, Music } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '../../lib/utils'
 
 export interface AudioPlayerProps {
+  id?: string
   src: string
   mimeType?: string
   autoPlay?: boolean
   className?: string
   compact?: boolean
+  isHovered?: boolean
 }
 
 export function AudioPlayer({
+  id,
   src,
   autoPlay = false,
   className,
-  compact = false
+  compact = false,
+  isHovered: externalHovered
 }: AudioPlayerProps): JSX.Element {
   const audioRef = useRef<HTMLAudioElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -22,6 +27,17 @@ export function AudioPlayer({
   const [duration, setDuration] = useState(0)
   const [volume, setVolume] = useState(1)
   const [muted, setMuted] = useState(false)
+  const [internalHovered, setInternalHovered] = useState(false)
+
+  const isHovered = externalHovered ?? internalHovered
+
+  const bars = useMemo(() => {
+    const seed = (id || src).split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)
+    return Array.from({ length: 22 }, (_, index) => {
+      const value = Math.sin((index + seed) * 0.72) * 0.5 + Math.cos((index + seed) * 0.29) * 0.5
+      return 22 + Math.round(Math.abs(value) * 52)
+    })
+  }, [id, src])
 
   useEffect(() => {
     if (autoPlay && src && audioRef.current) {
@@ -74,23 +90,28 @@ export function AudioPlayer({
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
+  useEffect(() => {
+    if (!compact || !isHovered || !src || !audioRef.current) return
+    void audioRef.current.play().catch(() => undefined)
+    setIsPlaying(true)
+  }, [compact, isHovered, src])
+
+  useEffect(() => {
+    if (!compact || isHovered || !audioRef.current) return
+    audioRef.current.pause()
+    audioRef.current.currentTime = 0
+    setIsPlaying(false)
+  }, [compact, isHovered])
+
   if (compact) {
     return (
       <div 
-        className={cn("relative flex h-full w-full items-center justify-center bg-black/20 backdrop-blur-sm", className)}
-        onMouseEnter={() => {
-          if (audioRef.current) {
-            void audioRef.current.play().catch(() => undefined)
-            setIsPlaying(true)
-          }
-        }}
-        onMouseLeave={() => {
-          if (audioRef.current) {
-            audioRef.current.pause()
-            audioRef.current.currentTime = 0
-            setIsPlaying(false)
-          }
-        }}
+        className={cn(
+          "group relative flex h-full w-full flex-col items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_28%_18%,rgba(99,179,237,0.4),transparent_28%),linear-gradient(135deg,#182235_0%,#263b52_48%,#25403f_100%)] px-5 text-white", 
+          className
+        )}
+        onMouseEnter={() => setInternalHovered(true)}
+        onMouseLeave={() => setInternalHovered(false)}
       >
         <audio
           ref={audioRef}
@@ -101,19 +122,65 @@ export function AudioPlayer({
           onPlay={() => setIsPlaying(true)}
           onPause={() => setIsPlaying(false)}
         />
-        <div className={cn(
-          "flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 transition-all duration-300",
-          isPlaying ? "scale-110 bg-emerald-500/40" : "scale-100"
-        )}>
-          {isPlaying ? <Pause className="h-6 w-6" /> : <Play className="ml-1 h-6 w-6" />}
-        </div>
         
-        {/* Simple Progress Bar at bottom for compact view */}
-        <div className="absolute bottom-0 left-0 h-1 w-full bg-white/10">
-          <div 
-            className="h-full bg-emerald-500 transition-all duration-100" 
-            style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
-          />
+        <Music className={cn(
+          "h-10 w-10 text-white/80 transition-all duration-500 drop-shadow",
+          isPlaying ? "opacity-0 scale-150" : "scale-100 opacity-60"
+        )} />
+
+        {/* Time Remaining Indicator */}
+        <div className="absolute right-2 bottom-2 rounded-full bg-black/40 px-2 py-0.5 text-[10px] font-medium tabular-nums text-white/90 backdrop-blur-md z-30">
+          -{duration && isFinite(duration) ? formatTime(Math.max(0, duration - currentTime)) : '0:00'}
+        </div>
+
+        <div className="mt-5 flex h-12 w-full max-w-[12rem] items-end justify-center gap-1.5">
+          {bars.map((height, index) => (
+            <motion.span
+              key={`${id || src}-${index}`}
+              className={cn(
+                "w-1.5 rounded-full",
+                index % 3 === 0 ? "bg-accent" : index % 3 === 1 ? "bg-blue-400/80" : "bg-white/60"
+              )}
+              initial={{ height: `${height}%` }}
+              animate={isPlaying ? {
+                height: [`${height}%`, `${Math.min(100, height + 30)}%`, `${Math.max(20, height - 20)}%`, `${height}%`],
+              } : { height: `${height}%` }}
+              transition={isPlaying ? {
+                duration: 0.6 + (index % 4) * 0.1,
+                repeat: Infinity,
+                ease: "easeInOut",
+                delay: index * 0.02
+              } : { duration: 0.3 }}
+            />
+          ))}
+        </div>
+
+        {/* Progress Bar (Interactive) */}
+        <div className="absolute inset-x-0 bottom-0 z-30 h-[3px] w-full bg-black/20 opacity-0 transition-all duration-200 group-hover:opacity-100 hover:h-[6px]">
+          <div className="group/progress relative h-full w-full bg-white/10">
+            <input
+              type="range"
+              min={0}
+              max={duration || 0}
+              step={0.01}
+              value={currentTime}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(event) => {
+                event.stopPropagation()
+                const time = Number(event.target.value)
+                if (audioRef.current) {
+                  audioRef.current.currentTime = time
+                  setCurrentTime(time)
+                }
+              }}
+              className="absolute inset-0 z-10 w-full cursor-pointer opacity-0"
+            />
+            <div
+              className="absolute left-0 top-0 h-full bg-accent"
+              style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
+            />
+          </div>
         </div>
       </div>
     )

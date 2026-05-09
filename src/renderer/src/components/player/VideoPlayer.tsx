@@ -1,5 +1,5 @@
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react'
-import { Play } from 'lucide-react'
+import { Play, Volume2, VolumeX } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { VideoPlayerControls } from './VideoPlayerControls'
 import { extractFirstFrame } from '../../lib/video-utils'
@@ -17,6 +17,7 @@ export interface VideoPlayerProps {
   className?: string
   compact?: boolean
   assetId?: string
+  isHovered?: boolean
 }
 
 export function VideoPlayer({
@@ -29,7 +30,8 @@ export function VideoPlayer({
   seekTo,
   className,
   compact = false,
-  assetId
+  assetId,
+  isHovered: externalHovered
 }: VideoPlayerProps): JSX.Element {
   const videoRef = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -45,14 +47,15 @@ export function VideoPlayer({
   const [derivedPoster, setDerivedPoster] = useState<string | undefined>(poster)
   const [previewTime, setPreviewTime] = useState<number | null>(null)
   const [previewPosition, setPreviewPosition] = useState(0)
-  const [isHovered, setIsHovered] = useState(false)
+  const [internalHovered, setInternalHovered] = useState(false)
   const [resolvedSrc, setResolvedSrc] = useState(src)
+
+  const isHovered = externalHovered ?? internalHovered
   const controlsTimer = useRef<number | null>(null)
   const { addToast } = useAppStore()
   const { activeProjectId } = useProjectStore()
 
   const resolvedPoster = derivedPoster ?? poster
-
   useEffect(() => {
     setDerivedPoster(poster)
   }, [poster, src])
@@ -315,11 +318,11 @@ export function VideoPlayer({
       <div
         ref={containerRef}
         onMouseEnter={() => {
-          setIsHovered(true)
+          setInternalHovered(true)
           setIsPlaying(true)
         }}
         onMouseLeave={() => {
-          setIsHovered(false)
+          setInternalHovered(false)
           setIsPlaying(false)
           if (videoRef.current) {
             videoRef.current.pause()
@@ -334,7 +337,7 @@ export function VideoPlayer({
           ref={videoRef}
           src={resolvedSrc}
           poster={resolvedPoster}
-          muted
+          muted={muted}
           loop
           playsInline
           preload="metadata"
@@ -345,6 +348,18 @@ export function VideoPlayer({
             event.preventDefault()
           }}
         />
+
+        {/* Mute/Unmute Button (Compact) */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            handleMuteToggle()
+          }}
+          className="absolute bottom-2 right-2 z-30 flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-white/90 opacity-0 backdrop-blur-md transition-all duration-200 group-hover:opacity-100 hover:bg-black/60"
+        >
+          {muted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+        </button>
 
         {/* Progress Bar (Compact) */}
         <div className="absolute inset-x-0 bottom-0 z-30 h-[3px] w-full bg-black/20 opacity-0 transition-all duration-200 group-hover:opacity-100 hover:h-[5px]">
