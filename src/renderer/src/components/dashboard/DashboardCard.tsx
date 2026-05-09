@@ -188,7 +188,7 @@ function FeedItemModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/75 p-6 backdrop-blur-md"
+          className="fixed inset-0 z-110 flex items-center justify-center bg-black/75 p-6 backdrop-blur-md"
         >
           <motion.div
             initial={{ opacity: 0, y: 18, scale: 0.98 }}
@@ -204,7 +204,7 @@ function FeedItemModal({
               <X className="h-4 w-4" />
             </button>
 
-            <div className="flex max-h-[78vh] items-center justify-center bg-black/40 p-6">
+            <div className="flex w-full max-h-[78vh] items-center justify-center bg-black/40 p-6">
               {item.type === 'video' ? (
                 <DashboardVideoSurface item={item} autoPlay className="aspect-video w-full max-w-5xl" />
               ) : item.type === 'image' ? (
