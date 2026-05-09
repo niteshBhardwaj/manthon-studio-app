@@ -8,6 +8,7 @@ type VideoAssetLike = {
 
 const THUMBNAIL_QUALITY = 0.82
 const THUMBNAIL_MAX_WIDTH = 1280
+const FRAME_THUMBNAIL_MAX_WIDTH = 320
 
 function toAssetUrl(path: string): string {
   return `asset:///${path.replace(/\\/g, '/')}`
@@ -40,7 +41,8 @@ function waitForLoadedMetadata(video: HTMLVideoElement): Promise<void> {
 function seekTo(video: HTMLVideoElement, requestedTime: number): Promise<void> {
   return new Promise((resolve, reject) => {
     const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0
-    const targetTime = duration > 0 ? Math.min(Math.max(requestedTime, 0), Math.max(duration - 0.05, 0)) : 0
+    const targetTime =
+      duration > 0 ? Math.min(Math.max(requestedTime, 0), Math.max(duration - 0.05, 0)) : 0
 
     const cleanup = (): void => {
       window.clearTimeout(timeout)
@@ -75,7 +77,11 @@ function seekTo(video: HTMLVideoElement, requestedTime: number): Promise<void> {
   })
 }
 
-async function extractVideoFrame(src: string, timeSeconds: number): Promise<string> {
+async function extractVideoFrame(
+  src: string,
+  timeSeconds: number,
+  maxWidth = THUMBNAIL_MAX_WIDTH
+): Promise<string> {
   const video = document.createElement('video')
   video.crossOrigin = 'anonymous'
   video.muted = true
@@ -90,7 +96,7 @@ async function extractVideoFrame(src: string, timeSeconds: number): Promise<stri
 
     const sourceWidth = video.videoWidth || 1
     const sourceHeight = video.videoHeight || 1
-    const scale = Math.min(1, THUMBNAIL_MAX_WIDTH / sourceWidth)
+    const scale = Math.min(1, maxWidth / sourceWidth)
     const canvas = document.createElement('canvas')
     canvas.width = Math.max(1, Math.round(sourceWidth * scale))
     canvas.height = Math.max(1, Math.round(sourceHeight * scale))
@@ -111,11 +117,14 @@ export async function extractVideoThumbnail(src: string): Promise<string> {
 }
 
 export async function extractFrameAtTime(src: string, timeSeconds: number): Promise<string> {
-  return extractVideoFrame(src, timeSeconds)
+  return extractVideoFrame(src, timeSeconds, FRAME_THUMBNAIL_MAX_WIDTH)
 }
 
-export async function generateVideoThumbnailForAsset(asset: VideoAssetLike): Promise<string | null> {
-  if (asset.type !== 'video' || asset.thumbnail_path || !window.manthan?.generateThumbnail) return null
+export async function generateVideoThumbnailForAsset(
+  asset: VideoAssetLike
+): Promise<string | null> {
+  if (asset.type !== 'video' || asset.thumbnail_path || !window.manthan?.generateThumbnail)
+    return null
 
   try {
     const thumbnail = await extractVideoThumbnail(toAssetUrl(asset.storage_path))

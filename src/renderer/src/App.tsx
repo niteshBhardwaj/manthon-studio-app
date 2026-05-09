@@ -30,7 +30,9 @@ function canPlayFromLocalAsset(type: string): boolean {
 }
 
 function playCompletionChime(): void {
-  const AudioContextCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+  const AudioContextCtor =
+    window.AudioContext ||
+    (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
   if (!AudioContextCtor) return
 
   const context = new AudioContextCtor()
@@ -69,12 +71,14 @@ function App(): JSX.Element {
     })
 
     if (typeof window !== 'undefined' && window.manthan) {
-      const unsubProgress = window.manthan.onQueueJobProgress((payload: QueueJobProgressPayload) => {
-        updateJob(payload.jobId, {
-          status: payload.status === 'running' ? 'generating' : 'queued',
-          progress: payload.progress
-        })
-      })
+      const unsubProgress = window.manthan.onQueueJobProgress(
+        (payload: QueueJobProgressPayload) => {
+          updateJob(payload.jobId, {
+            status: payload.status === 'running' ? 'generating' : 'queued',
+            progress: payload.progress
+          })
+        }
+      )
 
       const unsubComplete = window.manthan.onQueueJobComplete(
         async (payload: QueueJobCompletePayload) => {
@@ -91,7 +95,8 @@ function App(): JSX.Element {
 
           if (payload.job.type === 'video' && payload.result.assetId && !thumbnailPath) {
             const mimeType = payload.result.mimeType || 'video/mp4'
-            const primaryVideoSrc = localAssetUri || (base64Data ? `data:${mimeType};base64,${base64Data}` : '')
+            const primaryVideoSrc =
+              localAssetUri || (base64Data ? `data:${mimeType};base64,${base64Data}` : '')
             const sources = primaryVideoSrc ? [primaryVideoSrc] : []
 
             for (const videoSrc of sources) {
@@ -112,7 +117,9 @@ function App(): JSX.Element {
               const fallbackBase64 = await window.manthan.readAsset(payload.result.assetId)
               if (fallbackBase64) {
                 try {
-                  const thumbnail = await extractVideoThumbnail(`data:${mimeType};base64,${fallbackBase64}`)
+                  const thumbnail = await extractVideoThumbnail(
+                    `data:${mimeType};base64,${fallbackBase64}`
+                  )
                   thumbnailPath = await window.manthan.generateThumbnail(
                     payload.result.assetId,
                     thumbnail,
@@ -134,7 +141,9 @@ function App(): JSX.Element {
               type: payload.job.type,
               data: localAssetUri ? '' : base64Data,
               mimeType: payload.result.mimeType || 'application/octet-stream',
-              uri: localAssetUri ?? (isProtectedGoogleMediaUri(payload.result.uri) ? undefined : payload.result.uri),
+              uri:
+                localAssetUri ??
+                (isProtectedGoogleMediaUri(payload.result.uri) ? undefined : payload.result.uri),
               assetId: payload.result.assetId,
               thumbnailPath
             }
@@ -174,6 +183,8 @@ function App(): JSX.Element {
           message: payload.error,
           tone: 'error'
         })
+        setHistoryHasUpdates(true)
+        window.dispatchEvent(new CustomEvent('manthan:dashboard-refresh'))
       })
 
       return () => {

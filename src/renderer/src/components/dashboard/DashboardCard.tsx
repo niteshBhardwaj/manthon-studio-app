@@ -1,15 +1,18 @@
 import { type JSX, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
+  AlertTriangle,
   Copy,
   Download,
   Image as ImageIcon,
+  ImageOff,
   MoreHorizontal,
   Music,
   RotateCcw,
   Star,
   Trash2,
   Video,
+  VideoOff,
   X
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
@@ -18,6 +21,7 @@ import { AudioPlayer } from '../player/AudioPlayer'
 import { VideoLightbox } from '../player/VideoLightbox'
 import type { DashboardFeedItem } from '../../hooks/useDashboardFeed'
 import type { GenerationJob } from '../../stores/generation-store'
+import { useSmoothProgress } from '../../hooks/useSmoothProgress'
 
 function formatMetadata(item: DashboardFeedItem): string {
   const parts: string[] = []
@@ -67,7 +71,8 @@ export function dashboardItemToGenerationJob(item: DashboardFeedItem): Generatio
       contentType: item.type,
       activeMode:
         'activeMode' in config && typeof config.activeMode === 'string' ? config.activeMode : null,
-      batchCount: 'batchCount' in config && typeof config.batchCount === 'number' ? config.batchCount : 1,
+      batchCount:
+        'batchCount' in config && typeof config.batchCount === 'number' ? config.batchCount : 1,
       capabilityValues
     },
     progress: item.progress,
@@ -75,17 +80,15 @@ export function dashboardItemToGenerationJob(item: DashboardFeedItem): Generatio
     completedAt: item.generation.completed_at ?? undefined,
     result: item.previewSrc
       ? {
-        type: item.type,
-        data: '',
-        mimeType: item.asset?.mime_type ?? 'video/mp4',
-        uri: item.previewSrc,
-        assetId: item.asset?.id ?? item.metadata.resultAssetId ?? undefined
-      }
+          type: item.type,
+          data: '',
+          mimeType: item.asset?.mime_type ?? 'video/mp4',
+          uri: item.previewSrc,
+          assetId: item.asset?.id ?? item.metadata.resultAssetId ?? undefined
+        }
       : undefined
   }
 }
-
-
 
 function DashboardVideoSurface({
   item,
@@ -178,7 +181,14 @@ function FeedItemModal({
   if (!isOpen) return null
 
   if (item.type === 'video' && generationJob) {
-    return <VideoLightbox job={generationJob} isOpen={isOpen} onClose={onClose} />
+    return (
+      <VideoLightbox
+        job={generationJob}
+        isOpen={isOpen}
+        onClose={onClose}
+        layoutId={`dashboard-card-${item.id}`}
+      />
+    )
   }
 
   return (
@@ -191,6 +201,7 @@ function FeedItemModal({
           className="fixed inset-0 z-110 flex items-center justify-center bg-black/75 p-6 backdrop-blur-md"
         >
           <motion.div
+            layoutId={`dashboard-card-${item.id}`}
             initial={{ opacity: 0, y: 18, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 18, scale: 0.98 }}
@@ -206,7 +217,11 @@ function FeedItemModal({
 
             <div className="flex w-full max-h-[78vh] items-center justify-center bg-black/40 p-6">
               {item.type === 'video' ? (
-                <DashboardVideoSurface item={item} autoPlay className="aspect-video w-full max-w-5xl" />
+                <DashboardVideoSurface
+                  item={item}
+                  autoPlay
+                  className="aspect-video w-full max-w-5xl"
+                />
               ) : item.type === 'image' ? (
                 <img
                   src={item.previewSrc ?? item.thumbnailSrc ?? ''}
@@ -254,6 +269,7 @@ export function DashboardCard({
 }): JSX.Element {
   const isGenerating = item.status === 'generating' || item.status === 'queued'
   const isFailed = item.status === 'failed'
+  const displayProgress = useSmoothProgress(item.progress, isGenerating)
   const [menuOpen, setMenuOpen] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
 
@@ -279,6 +295,7 @@ export function DashboardCard({
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
+        layoutId={`dashboard-card-${item.id}`}
         role="button"
         tabIndex={0}
         onClick={() => {
@@ -295,12 +312,37 @@ export function DashboardCard({
         onMouseLeave={() => setIsHovered(false)}
         className={cn(
           'group relative aspect-[4/3] w-full cursor-pointer overflow-hidden rounded-xl border bg-bg-secondary text-left transition-all',
-          selected ? 'border-accent shadow-[0_0_0_1px_rgba(90,184,255,0.25)]' : 'border-border-subtle hover:border-border'
+          selected
+            ? 'border-accent shadow-[0_0_0_1px_rgba(90,184,255,0.25)]'
+            : 'border-border-subtle hover:border-border'
         )}
       >
         <div className="absolute inset-0">
-          {item.type === 'video' ? (
-            <DashboardVideoSurface item={item} compact isHovered={isHovered} className="h-full w-full" />
+          {isFailed ? (
+            <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-[linear-gradient(180deg,rgba(42,12,16,0.92),rgba(14,13,18,0.98))] p-4 text-center">
+              <div className="flex h-11 w-11 items-center justify-center rounded-full border border-red-300/20 bg-red-400/10 text-red-200">
+                {item.type === 'video' ? (
+                  <VideoOff className="h-5 w-5" />
+                ) : item.type === 'image' ? (
+                  <ImageOff className="h-5 w-5" />
+                ) : (
+                  <AlertTriangle className="h-5 w-5" />
+                )}
+              </div>
+              <span className="rounded-full bg-red-400/12 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-red-200">
+                Failed
+              </span>
+              <p className="line-clamp-2 text-[11px] leading-4 text-red-100/75">
+                {item.generation?.error ?? 'Generation failed'}
+              </p>
+            </div>
+          ) : item.type === 'video' ? (
+            <DashboardVideoSurface
+              item={item}
+              compact
+              isHovered={isHovered}
+              className="h-full w-full"
+            />
           ) : item.type === 'image' ? (
             <img
               src={item.thumbnailSrc ?? item.previewSrc ?? ''}
@@ -315,22 +357,46 @@ export function DashboardCard({
         {isGenerating ? (
           <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/85 via-black/25 to-transparent p-3">
             <div className="mb-2 h-1.5 overflow-hidden rounded-full bg-white/10">
-              <div className="h-full rounded-full bg-accent" style={{ width: `${Math.max(4, item.progress)}%` }} />
+              <div
+                className="h-full rounded-full bg-accent transition-[width] duration-200"
+                style={{ width: `${Math.max(4, displayProgress)}%` }}
+              />
             </div>
-            <div className="text-[11px] font-medium text-white/85">{Math.round(item.progress)}%</div>
+            <div className="text-[11px] font-medium text-white/85">
+              {Math.round(displayProgress)}%
+            </div>
           </div>
         ) : null}
 
         {isFailed ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/65 px-3 text-center text-[11px] text-red-300">
-            {item.generation?.error ?? 'Generation failed'}
+          <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2 rounded-xl border border-red-300/15 bg-black/45 p-2 backdrop-blur-md">
+            <span className="min-w-0 truncate text-[11px] text-red-100/85">
+              {item.generation?.error ?? 'Generation failed'}
+            </span>
+            {onRerun ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onRerun()
+                }}
+                className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-white/10 px-2 py-1 text-[10px] font-medium text-white transition-colors hover:bg-white/15"
+              >
+                <RotateCcw className="h-3 w-3" />
+                Retry
+              </button>
+            ) : null}
           </div>
         ) : null}
 
-        <div className={cn(
-          "pointer-events-none absolute bottom-2 right-2 z-20 text-white/85 drop-shadow-[0_1px_6px_rgba(0,0,0,0.9)] transition-opacity duration-200",
-          ((item.type === 'audio' || item.type === 'video') && isHovered) ? "opacity-0" : "opacity-100"
-        )}>
+        <div
+          className={cn(
+            'pointer-events-none absolute bottom-2 right-2 z-20 text-white/85 drop-shadow-[0_1px_6px_rgba(0,0,0,0.9)] transition-opacity duration-200',
+            (item.type === 'audio' || item.type === 'video') && isHovered
+              ? 'opacity-0'
+              : 'opacity-100'
+          )}
+        >
           {typeIcon}
         </div>
 
@@ -427,7 +493,9 @@ export function DashboardCard({
                 }}
                 className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-white/10"
               >
-                <Star className={cn('h-3.5 w-3.5', item.starred ? 'fill-current text-amber-300' : '')} />
+                <Star
+                  className={cn('h-3.5 w-3.5', item.starred ? 'fill-current text-amber-300' : '')}
+                />
                 {item.starred ? 'Unstar' : 'Star'}
               </button>
             ) : null}

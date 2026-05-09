@@ -11,7 +11,7 @@ import { dashboardItemToGenerationJob } from './DashboardCard'
 import { useAppStore } from '../../stores/app-store'
 import { generateVideoThumbnailsForAssets } from '../../lib/thumbnail-utils'
 
-const RECENT_COMPLETION_MS = 2000
+const RECENT_COMPLETION_MS = 30000
 
 function buildActiveQueueItems(
   projectId: string,
@@ -108,11 +108,16 @@ export function Dashboard(): JSX.Element {
     return () => window.clearInterval(timer)
   }, [activeProjectId, queueJobs])
 
-  const persistedIds = useMemo(() => new Set([...items, ...pinnedItems].map((item) => item.id)), [items, pinnedItems])
+  const persistedIds = useMemo(
+    () => new Set([...items, ...pinnedItems].map((item) => item.id)),
+    [items, pinnedItems]
+  )
 
   const activeItems = useMemo(
     () =>
-      buildActiveQueueItems(activeProjectId, queueJobs, now).filter((item) => !persistedIds.has(item.id)),
+      buildActiveQueueItems(activeProjectId, queueJobs, now).filter(
+        (item) => !persistedIds.has(item.id)
+      ),
     [activeProjectId, now, persistedIds, queueJobs]
   )
   const allSelectableItems = useMemo(
@@ -126,7 +131,8 @@ export function Dashboard(): JSX.Element {
         queueJobs
           .filter(
             (job) =>
-              job.project_id === activeProjectId && (job.status === 'completed' || job.status === 'failed')
+              job.project_id === activeProjectId &&
+              (job.status === 'completed' || job.status === 'failed')
           )
           .map((job) => job.id)
       ),
@@ -134,14 +140,16 @@ export function Dashboard(): JSX.Element {
   )
 
   useEffect(() => {
-    const newCompletions = [...completedQueueIds].filter((id) => !prevCompletedQueueIdsRef.current.has(id))
+    const newCompletions = [...completedQueueIds].filter(
+      (id) => !prevCompletedQueueIdsRef.current.has(id)
+    )
     prevCompletedQueueIdsRef.current = completedQueueIds
 
     if (newCompletions.length === 0) return
 
     const timer = window.setTimeout(() => {
       void refresh()
-    }, 500)
+    }, 150)
     return () => window.clearTimeout(timer)
   }, [completedQueueIds, refresh])
 
@@ -232,7 +240,8 @@ export function Dashboard(): JSX.Element {
 
       if (['ArrowRight', 'ArrowDown'].includes(event.key)) {
         event.preventDefault()
-        const next = allSelectableItems[Math.min(allSelectableItems.length - 1, normalizedIndex + 1)]
+        const next =
+          allSelectableItems[Math.min(allSelectableItems.length - 1, normalizedIndex + 1)]
         setSelectedItemId(next?.id ?? null)
       }
 

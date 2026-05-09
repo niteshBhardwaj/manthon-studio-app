@@ -315,6 +315,20 @@ export const MODEL_REGISTRY: ModelDescriptor[] = [
         ],
         defaultValue: '8'
       }
+    ],
+    modes: [
+      {
+        id: 'frames',
+        label: 'Frames',
+        icon: 'frames',
+        capabilities: [{ type: 'frames', label: 'Frames' }]
+      },
+      {
+        id: 'ingredients',
+        label: 'Ingredients',
+        icon: 'ingredients',
+        capabilities: [{ type: 'ingredients', label: 'Ingredients' }]
+      }
     ]
   },
   {
@@ -428,11 +442,6 @@ export const MODEL_REGISTRY: ModelDescriptor[] = [
         defaultValue: 1
       },
       {
-        type: 'include_thoughts',
-        label: 'Thinking',
-        defaultValue: true
-      },
-      {
         type: 'web_search_grounding',
         label: 'Web Search Grounding',
         defaultValue: false
@@ -462,8 +471,7 @@ export const MODEL_REGISTRY: ModelDescriptor[] = [
         title: 'Style Transfer (via Thinking)',
         prompt:
           'Generate a futuristic city. Thought process: 1. Start with a modern skyline. 2. Add flying cars and neon lights. 3. Apply a cyberpunk color palette.',
-        imageName: 'city_style_transfer',
-        configOverrides: { thinking_level: 'high', include_thoughts: true }
+        imageName: 'city_style_transfer'
       },
       {
         title: 'Logo Design',

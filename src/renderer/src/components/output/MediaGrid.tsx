@@ -1,14 +1,17 @@
 import { type JSX, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
+  AlertTriangle,
   Copy,
   Download,
   Image as ImageIcon,
+  ImageOff,
   Loader2,
   Music,
   RotateCcw,
   Trash2,
   Video,
+  VideoOff,
   X
 } from 'lucide-react'
 import { useGenerationStore, type GenerationJob } from '../../stores/generation-store'
@@ -19,13 +22,16 @@ import { Tilt } from '../motion-primitives/tilt'
 import { VideoPlayer } from '../player/VideoPlayer'
 import { AudioPlayer } from '../player/AudioPlayer'
 import { VideoLightbox } from '../player/VideoLightbox'
+import { useSmoothProgress } from '../../hooks/useSmoothProgress'
 
 function formatJobConfig(job: GenerationJob): string {
   const parts: string[] = []
   const values = job.config.capabilityValues
 
-  if (typeof values.aspect_ratio === 'string' && values.aspect_ratio) parts.push(values.aspect_ratio)
-  if (typeof values.resolution === 'string' && values.resolution) parts.push(values.resolution.toUpperCase())
+  if (typeof values.aspect_ratio === 'string' && values.aspect_ratio)
+    parts.push(values.aspect_ratio)
+  if (typeof values.resolution === 'string' && values.resolution)
+    parts.push(values.resolution.toUpperCase())
   if (typeof values.duration === 'number') parts.push(`${values.duration}s`)
   if (job.config.batchCount > 1) parts.push(`x${job.config.batchCount}`)
 
@@ -167,6 +173,7 @@ function MediaCard({ job }: { job: GenerationJob }): JSX.Element {
   const isCompleted = job.status === 'completed'
   const isFailed = job.status === 'failed'
   const [isHovered, setIsHovered] = useState(false)
+  const displayProgress = useSmoothProgress(job.progress, isGenerating)
 
   useEffect(() => {
     if (!isGenerating) return
@@ -221,7 +228,12 @@ function MediaCard({ job }: { job: GenerationJob }): JSX.Element {
               }}
               className="block w-full text-left"
             >
-              <div className={cn('relative overflow-hidden', job.type === 'audio' ? 'h-44' : 'aspect-video')}>
+              <div
+                className={cn(
+                  'relative overflow-hidden',
+                  job.type === 'audio' ? 'h-44' : 'aspect-video'
+                )}
+              >
                 {isGenerating ? (
                   <div className="absolute inset-0 flex flex-col justify-between bg-[radial-gradient(circle_at_top,rgba(90,184,255,0.18),transparent_45%),linear-gradient(180deg,rgba(9,13,20,0.92),rgba(9,13,20,0.98))] p-5">
                     <div className="flex items-center justify-between">
@@ -229,7 +241,9 @@ function MediaCard({ job }: { job: GenerationJob }): JSX.Element {
                         {typeIcon}
                       </div>
                       <div className="text-right">
-                        <div className="text-2xl font-semibold text-text-primary">{Math.round(job.progress)}%</div>
+                        <div className="text-2xl font-semibold text-text-primary">
+                          {Math.round(displayProgress)}%
+                        </div>
                         <div className="text-[10px] uppercase tracking-[0.18em] text-text-muted">
                           {job.status === 'queued' ? 'Queued' : 'Rendering'}
                         </div>
@@ -245,14 +259,16 @@ function MediaCard({ job }: { job: GenerationJob }): JSX.Element {
                         <motion.div
                           className="h-full rounded-full bg-accent"
                           initial={{ width: '4%' }}
-                          animate={{ width: `${Math.max(4, job.progress)}%` }}
+                          animate={{ width: `${Math.max(4, displayProgress)}%` }}
                         />
                       </div>
                       <div className="mt-3 flex items-center justify-between text-xs text-text-muted">
                         <span>Elapsed: {formatElapsed(job.startedAt, now)}</span>
                         <span>{estimateRemaining(job, now)}</span>
                       </div>
-                      <p className="mt-4 line-clamp-2 text-xs leading-5 text-text-secondary">{job.prompt}</p>
+                      <p className="mt-4 line-clamp-2 text-xs leading-5 text-text-secondary">
+                        {job.prompt}
+                      </p>
                     </div>
 
                     <div className="flex items-center justify-between border-t border-white/5 pt-4">
@@ -283,7 +299,12 @@ function MediaCard({ job }: { job: GenerationJob }): JSX.Element {
                         className="h-full w-full"
                       />
                     ) : job.type === 'audio' ? (
-                      <MediaAudioSurface job={job} compact isHovered={isHovered} className="h-full w-full" />
+                      <MediaAudioSurface
+                        job={job}
+                        compact
+                        isHovered={isHovered}
+                        className="h-full w-full"
+                      />
                     ) : (
                       <img
                         src={`data:${job.result.mimeType};base64,${job.result.data}`}
@@ -295,11 +316,31 @@ function MediaCard({ job }: { job: GenerationJob }): JSX.Element {
                 ) : null}
 
                 {isFailed ? (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[linear-gradient(180deg,rgba(40,8,12,0.88),rgba(16,10,12,0.96))] px-4 text-center">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-error/10 text-error">
-                      !
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[linear-gradient(180deg,rgba(40,8,12,0.9),rgba(16,10,12,0.98))] px-4 text-center">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-full border border-red-300/20 bg-error/10 text-error">
+                      {job.type === 'video' ? (
+                        <VideoOff className="h-5 w-5" />
+                      ) : job.type === 'image' ? (
+                        <ImageOff className="h-5 w-5" />
+                      ) : (
+                        <AlertTriangle className="h-5 w-5" />
+                      )}
                     </div>
+                    <span className="rounded-full bg-red-400/12 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-red-200">
+                      Failed
+                    </span>
                     <span className="text-xs text-error">{job.error || 'Generation failed'}</span>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        handleRerun()
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-[11px] font-medium text-white transition-colors hover:bg-white/15"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      Retry
+                    </button>
                   </div>
                 ) : null}
 

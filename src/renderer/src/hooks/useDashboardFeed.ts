@@ -147,10 +147,17 @@ export function useDashboardFeed(projectId: string): UseDashboardFeedReturn {
       ])
 
       const assetMap = new Map(assetResult.assets.map((asset) => [asset.id, asset]))
+      const generatedResultAssetIds = new Set(
+        generationResult.items
+          .map((generation) => generation.result_asset_id)
+          .filter((id): id is string => Boolean(id))
+      )
 
       setGenerationItems(
         generationResult.items.map((generation) => {
-          const linkedAsset = generation.result_asset_id ? assetMap.get(generation.result_asset_id) ?? null : null
+          const linkedAsset = generation.result_asset_id
+            ? (assetMap.get(generation.result_asset_id) ?? null)
+            : null
 
           const capabilityValues =
             'capabilityValues' in generation.config &&
@@ -166,13 +173,18 @@ export function useDashboardFeed(projectId: string): UseDashboardFeedReturn {
             source: 'generated',
             title: generation.prompt,
             previewSrc: buildAssetUrl(linkedAsset?.storage_path),
-            thumbnailSrc: buildAssetUrl(linkedAsset?.thumbnail_path) ?? buildAssetUrl(linkedAsset?.storage_path),
+            thumbnailSrc:
+              buildAssetUrl(linkedAsset?.thumbnail_path) ??
+              buildAssetUrl(linkedAsset?.storage_path),
             metadata: {
               model: generation.model,
               provider: generation.provider,
               config: generation.config,
               sizeBytes: linkedAsset?.size_bytes,
-              duration: typeof capabilityValues.duration === 'number' ? capabilityValues.duration : undefined,
+              duration:
+                typeof capabilityValues.duration === 'number'
+                  ? capabilityValues.duration
+                  : undefined,
               filename: linkedAsset?.filename,
               resultAssetId: generation.result_asset_id
             },
@@ -194,7 +206,7 @@ export function useDashboardFeed(projectId: string): UseDashboardFeedReturn {
 
       setAssetItems(
         assetResult.assets
-          .filter((asset) => asset.source !== 'generated')
+          .filter((asset) => asset.source !== 'generated' || !generatedResultAssetIds.has(asset.id))
           .map((asset) => ({
             id: asset.id,
             kind: 'asset' as const,
@@ -205,7 +217,8 @@ export function useDashboardFeed(projectId: string): UseDashboardFeedReturn {
             thumbnailSrc: buildAssetUrl(asset.thumbnail_path) ?? buildAssetUrl(asset.storage_path),
             metadata: {
               sizeBytes: asset.size_bytes,
-              filename: asset.filename
+              filename: asset.filename,
+              ...asset.metadata
             },
             status: 'completed' as const,
             progress: 100,
@@ -224,7 +237,10 @@ export function useDashboardFeed(projectId: string): UseDashboardFeedReturn {
     void refresh()
   }, [refresh])
 
-  const combinedItems = useMemo(() => [...generationItems, ...assetItems], [assetItems, generationItems])
+  const combinedItems = useMemo(
+    () => [...generationItems, ...assetItems],
+    [assetItems, generationItems]
+  )
 
   const filteredItems = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase()
@@ -236,7 +252,9 @@ export function useDashboardFeed(projectId: string): UseDashboardFeedReturn {
     })
 
     const typeFiltered =
-      typeFilter === 'all' ? sourceFiltered : sourceFiltered.filter((item) => item.type === typeFilter)
+      typeFilter === 'all'
+        ? sourceFiltered
+        : sourceFiltered.filter((item) => item.type === typeFilter)
 
     const statusFiltered =
       statusFilter === 'all'
@@ -255,21 +273,32 @@ export function useDashboardFeed(projectId: string): UseDashboardFeedReturn {
     const searched = normalizedQuery
       ? starredFiltered.filter((item) => {
           const filename = item.metadata.filename?.toLowerCase() ?? ''
-          return item.title.toLowerCase().includes(normalizedQuery) || filename.includes(normalizedQuery)
+          return (
+            item.title.toLowerCase().includes(normalizedQuery) || filename.includes(normalizedQuery)
+          )
         })
       : starredFiltered
 
     return sortItems(searched, sortBy)
   }, [combinedItems, searchQuery, sortBy, sourceFilter, starredOnly, statusFilter, typeFilter])
 
-  const pinnedItems = useMemo(() => filteredItems.filter((item) => item.kind === 'generation' && item.starred), [filteredItems])
+  const pinnedItems = useMemo(
+    () => filteredItems.filter((item) => item.kind === 'generation' && item.starred),
+    [filteredItems]
+  )
   const nonPinnedItems = useMemo(
     () => filteredItems.filter((item) => !(item.kind === 'generation' && item.starred)),
     [filteredItems]
   )
 
-  const visiblePinnedItems = useMemo(() => pinnedItems.slice(0, visibleCount), [pinnedItems, visibleCount])
-  const visibleItems = useMemo(() => nonPinnedItems.slice(0, visibleCount), [nonPinnedItems, visibleCount])
+  const visiblePinnedItems = useMemo(
+    () => pinnedItems.slice(0, visibleCount),
+    [pinnedItems, visibleCount]
+  )
+  const visibleItems = useMemo(
+    () => nonPinnedItems.slice(0, visibleCount),
+    [nonPinnedItems, visibleCount]
+  )
   const hasMore = visibleCount < pinnedItems.length || visibleCount < nonPinnedItems.length
 
   const stats = useMemo(
@@ -315,19 +344,22 @@ export function useDashboardFeed(projectId: string): UseDashboardFeedReturn {
     )
   }, [])
 
-  const deleteItem = useCallback(async (id: string) => {
-    if (!window.manthan) return
+  const deleteItem = useCallback(
+    async (id: string) => {
+      if (!window.manthan) return
 
-    const generationMatch = generationItems.find((item) => item.id === id)
-    if (generationMatch) {
-      await window.manthan.deleteGeneration(id)
-      setGenerationItems((items) => items.filter((item) => item.id !== id))
-      return
-    }
+      const generationMatch = generationItems.find((item) => item.id === id)
+      if (generationMatch) {
+        await window.manthan.deleteGeneration(id)
+        setGenerationItems((items) => items.filter((item) => item.id !== id))
+        return
+      }
 
-    await window.manthan.deleteAsset(id)
-    setAssetItems((items) => items.filter((item) => item.id !== id))
-  }, [generationItems])
+      await window.manthan.deleteAsset(id)
+      setAssetItems((items) => items.filter((item) => item.id !== id))
+    },
+    [generationItems]
+  )
 
   return {
     items: nonPinnedItems,

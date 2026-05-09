@@ -171,7 +171,12 @@ export function buildPayload({
       'thinking_level',
       asString(capabilityValues.thinking_level, 'Thinking Level')
     )
-    const includeThoughts = asBoolean(capabilityValues.include_thoughts, 'Thinking Toggle')
+    const supportsThinkingToggle = model.capabilities.some(
+      (capability) => capability.type === 'include_thoughts'
+    )
+    const includeThoughts = supportsThinkingToggle
+      ? asBoolean(capabilityValues.include_thoughts, 'Thinking Toggle')
+      : undefined
     const webSearchGrounding = asBoolean(
       capabilityValues.web_search_grounding,
       'Web Search Grounding'

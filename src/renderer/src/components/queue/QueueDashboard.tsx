@@ -1,9 +1,7 @@
 import { type JSX, useEffect, useMemo, useState } from 'react'
-import { AnimatePresence, Reorder, motion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import {
   CheckCircle2,
-  ChevronDown,
-  GripVertical,
   ListOrdered,
   Pause,
   Play,
@@ -22,6 +20,7 @@ import { useAppStore } from '../../stores/app-store'
 import { useGenerationStore } from '../../stores/generation-store'
 import { Button } from '../ui/button'
 import { cn } from '../../lib/utils'
+import { useSmoothProgress } from '../../hooks/useSmoothProgress'
 
 function formatRelativeTime(timestamp: number | null): string {
   if (!timestamp) return 'Just now'
@@ -46,10 +45,6 @@ function mediaIcon(type: QueueJob['type']): JSX.Element {
   if (type === 'video') return <Video className="h-4 w-4" />
   if (type === 'audio') return <Music className="h-4 w-4" />
   return <ImageIcon className="h-4 w-4" />
-}
-
-function trimPrompt(prompt: string): string {
-  return prompt.length > 96 ? `${prompt.slice(0, 93)}...` : prompt
 }
 
 function toFileUrl(path: string): string {
@@ -309,7 +304,9 @@ export function QueueDashboard(): JSX.Element {
         <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
           <div className="space-y-1">
             <h1 className="text-3xl font-bold tracking-tight text-text-primary">Queue</h1>
-            <p className="text-text-muted">Manage and track your media generation tasks in real-time.</p>
+            <p className="text-text-muted">
+              Manage and track your media generation tasks in real-time.
+            </p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -439,6 +436,7 @@ function JobItem({
   const isCompleted = job.status === 'completed'
   const isFailed = job.status === 'failed'
   const isDryRun = isDryRunJob(job)
+  const displayProgress = useSmoothProgress(job.progress ?? 0, isRunning)
 
   return (
     <motion.div
@@ -479,7 +477,7 @@ function JobItem({
           )}
           {isRunning && (
             <div className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-lg bg-accent text-[10px] font-bold text-accent-foreground shadow-lg">
-              {Math.round(job.progress ?? 0)}%
+              {Math.round(displayProgress)}%
             </div>
           )}
         </div>
@@ -524,10 +522,12 @@ function JobItem({
               <span>Finished {formatRelativeTime(job.completed_at)}</span>
             ) : isFailed ? (
               <div className="flex items-center gap-2">
-                <span>{isDryRun ? 'Intercepted' : 'Failed'} {formatRelativeTime(job.completed_at)}</span>
+                <span>
+                  {isDryRun ? 'Intercepted' : 'Failed'} {formatRelativeTime(job.completed_at)}
+                </span>
                 <span>·</span>
                 <span className={cn(isDryRun ? 'text-amber-400/80' : 'text-error')}>
-                  {isDryRun ? 'API Payload Logged' : (job.error || 'Generation failed')}
+                  {isDryRun ? 'API Payload Logged' : job.error || 'Generation failed'}
                 </span>
               </div>
             ) : (
@@ -550,7 +550,7 @@ function JobItem({
             </Button>
           )}
 
-          {(isFailed && !isDryRun) && (
+          {isFailed && !isDryRun && (
             <>
               <Button
                 variant="outline"
@@ -602,7 +602,7 @@ function JobItem({
           <motion.div
             className="h-full bg-accent shadow-[0_0_10px_rgba(var(--accent-rgb),0.5)]"
             initial={{ width: 0 }}
-            animate={{ width: `${Math.max(2, job.progress ?? 0)}%` }}
+            animate={{ width: `${Math.max(2, displayProgress)}%` }}
             transition={{ type: 'spring', stiffness: 100, damping: 20 }}
           />
         </div>
@@ -610,5 +610,3 @@ function JobItem({
     </motion.div>
   )
 }
-
-

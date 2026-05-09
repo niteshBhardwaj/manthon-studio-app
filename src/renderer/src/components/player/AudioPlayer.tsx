@@ -1,6 +1,5 @@
-import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Play, Pause, Volume2, VolumeX, Music, Repeat } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { type JSX, useCallback, useEffect, useRef, useState } from 'react'
+import { Music, Pause, Play, Repeat, Volume2, VolumeX } from 'lucide-react'
 import { cn } from '../../lib/utils'
 
 export interface AudioPlayerProps {
@@ -112,21 +111,24 @@ export function AudioPlayer({
     }
   }, [loop, playbackRate])
 
-  const togglePlay = useCallback((e?: React.MouseEvent) => {
-    e?.stopPropagation()
-    const audio = audioRef.current
-    if (!audio) return
+  const togglePlay = useCallback(
+    (e?: React.MouseEvent) => {
+      e?.stopPropagation()
+      const audio = audioRef.current
+      if (!audio) return
 
-    initWebAudio()
+      initWebAudio()
 
-    if (audio.paused) {
-      void audio.play().catch(() => undefined)
-      setIsPlaying(true)
-    } else {
-      audio.pause()
-      setIsPlaying(false)
-    }
-  }, [initWebAudio])
+      if (audio.paused) {
+        void audio.play().catch(() => undefined)
+        setIsPlaying(true)
+      } else {
+        audio.pause()
+        setIsPlaying(false)
+      }
+    },
+    [initWebAudio]
+  )
 
   const handleTimeUpdate = useCallback(() => {
     if (audioRef.current) {
@@ -176,7 +178,7 @@ export function AudioPlayer({
     return (
       <div
         className={cn(
-          "group relative flex h-full w-full flex-col items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_28%_18%,rgba(99,179,237,0.4),transparent_28%),linear-gradient(135deg,#182235_0%,#263b52_48%,#25403f_100%)] px-5 text-white",
+          'group relative flex h-full w-full flex-col items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_28%_18%,rgba(99,179,237,0.4),transparent_28%),linear-gradient(135deg,#182235_0%,#263b52_48%,#25403f_100%)] px-5 text-white',
           className
         )}
         onMouseEnter={() => setInternalHovered(true)}
@@ -193,24 +195,31 @@ export function AudioPlayer({
           onPause={() => setIsPlaying(false)}
         />
 
-        <Music className={cn(
-          "h-10 w-10 text-white/80 transition-all duration-500 drop-shadow",
-          isPlaying ? "opacity-0 scale-150" : "scale-100 opacity-60"
-        )} />
+        <Music
+          className={cn(
+            'h-10 w-10 text-white/80 transition-all duration-500 drop-shadow',
+            isPlaying ? 'opacity-0 scale-150' : 'scale-100 opacity-60'
+          )}
+        />
 
         {/* Time Remaining Indicator */}
         <div className="absolute right-2 bottom-2 rounded-full bg-black/40 px-2 py-0.5 text-[10px] font-medium tabular-nums text-white/90 backdrop-blur-md z-30">
-          -{duration && isFinite(duration) ? formatTime(Math.max(0, duration - currentTime)) : '0:00'}
+          -
+          {duration && isFinite(duration)
+            ? formatTime(Math.max(0, duration - currentTime))
+            : '0:00'}
         </div>
 
         <div className="mt-5 flex h-12 w-full max-w-48 items-end justify-center gap-1.5">
           {bars.map((_, index) => (
             <span
               key={`${id || src}-${index}`}
-              ref={(el) => { barsRef.current[index] = el }}
+              ref={(el) => {
+                barsRef.current[index] = el
+              }}
               className={cn(
-                "w-1.5 rounded-full transition-[height] duration-75",
-                index % 3 === 0 ? "bg-accent" : index % 3 === 1 ? "bg-blue-400/80" : "bg-white/60"
+                'w-1.5 rounded-full transition-[height] duration-75',
+                index % 3 === 0 ? 'bg-accent' : index % 3 === 1 ? 'bg-blue-400/80' : 'bg-white/60'
               )}
               style={{ height: '10%' }}
             />
@@ -249,7 +258,12 @@ export function AudioPlayer({
   }
 
   return (
-    <div className={cn("relative flex flex-col items-center justify-between aspect-video w-full min-w-[320px] md:min-w-[600px] min-h-[16rem] max-h-[92vh] overflow-hidden rounded-[1.5rem] bg-[radial-gradient(circle_at_28%_18%,rgba(99,179,237,0.4),transparent_28%),linear-gradient(135deg,#182235_0%,#263b52_48%,#25403f_100%)] p-6 text-white", className)}>
+    <div
+      className={cn(
+        'relative flex flex-col items-center justify-between aspect-video w-full min-w-[320px] md:min-w-[600px] min-h-[16rem] max-h-[92vh] overflow-hidden rounded-[1.5rem] bg-[radial-gradient(circle_at_28%_18%,rgba(99,179,237,0.4),transparent_28%),linear-gradient(135deg,#182235_0%,#263b52_48%,#25403f_100%)] p-6 text-white',
+        className
+      )}
+    >
       <audio
         ref={audioRef}
         src={src}
@@ -268,10 +282,12 @@ export function AudioPlayer({
           {bars.map((_, index) => (
             <span
               key={`${id || src}-${index}`}
-              ref={(el) => { barsRef.current[index] = el }}
+              ref={(el) => {
+                barsRef.current[index] = el
+              }}
               className={cn(
-                "block w-2 rounded-full transition-[height] duration-75",
-                index % 3 === 0 ? "bg-accent" : index % 3 === 1 ? "bg-blue-400/80" : "bg-white/60"
+                'block w-2 rounded-full transition-[height] duration-75',
+                index % 3 === 0 ? 'bg-accent' : index % 3 === 1 ? 'bg-blue-400/80' : 'bg-white/60'
               )}
               style={{ height: '10%' }}
             />
@@ -357,8 +373,8 @@ export function AudioPlayer({
               onClick={() => setLoop(!loop)}
               title="Toggle loop"
               className={cn(
-                "flex h-9 w-9 items-center justify-center rounded-full transition-colors",
-                loop ? "bg-white/20 text-white" : "text-white/80 hover:bg-white/10 hover:text-white"
+                'flex h-9 w-9 items-center justify-center rounded-full transition-colors',
+                loop ? 'bg-white/20 text-white' : 'text-white/80 hover:bg-white/10 hover:text-white'
               )}
             >
               <Repeat className="h-4 w-4" />

@@ -52,7 +52,7 @@ export class GoogleVeoProvider implements MediaProvider {
         name: 'Veo 3.1 Lite',
         description: 'Fast, cost-effective video generation (max 1080p)',
         modality: 'video',
-        supportedInputs: ['text', 'image'],
+        supportedInputs: ['text', 'image', 'frames', 'video'],
         maxDuration: 8,
         supportedAspectRatios: ['16:9', '9:16'],
         supportedResolutions: ['720p', '1080p']
@@ -98,16 +98,21 @@ export class GoogleVeoProvider implements MediaProvider {
     if (!this.client) throw new Error('Provider not initialized')
 
     const isVideoExtension = !!params.video
-    logger.debug('Provider', `generateVideo() called [${isVideoExtension ? 'EXTENSION' : 'STANDARD'}]`, {
-      model: params.model || this.config.defaultModel,
-      prompt: params.prompt.length > 100 ? params.prompt.substring(0, 100) + '...' : params.prompt,
-      aspectRatio: params.aspectRatio,
-      resolution: params.resolution,
-      durationSeconds: params.durationSeconds,
-      personGeneration: params.personGeneration,
-      hasImage: !!params.image,
-      hasVideo: isVideoExtension
-    })
+    logger.debug(
+      'Provider',
+      `generateVideo() called [${isVideoExtension ? 'EXTENSION' : 'STANDARD'}]`,
+      {
+        model: params.model || this.config.defaultModel,
+        prompt:
+          params.prompt.length > 100 ? params.prompt.substring(0, 100) + '...' : params.prompt,
+        aspectRatio: params.aspectRatio,
+        resolution: params.resolution,
+        durationSeconds: params.durationSeconds,
+        personGeneration: params.personGeneration,
+        hasImage: !!params.image,
+        hasVideo: isVideoExtension
+      }
+    )
 
     const operationId = `veo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     const model = params.model || this.config.defaultModel

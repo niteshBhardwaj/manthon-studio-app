@@ -1,6 +1,6 @@
 import { type JSX, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Download, Film, X } from 'lucide-react'
+import { ChevronDown, Copy, Download, Film, Plus, RotateCcw, Trash2, X } from 'lucide-react'
 import type { GenerationJob } from '../../stores/generation-store'
 import { useGenerationStore } from '../../stores/generation-store'
 import { VideoPlayer } from './VideoPlayer'
@@ -46,7 +46,8 @@ function getJobDurationSeconds(job: GenerationJob): number {
   const resultDuration = (job.result as { duration?: unknown } | undefined)?.duration
   if (typeof resultDuration === 'number' && resultDuration > 0) return resultDuration
 
-  const configuredDuration = job.config.capabilityValues.duration
+  const configuredDuration =
+    job.config.capabilityValues.duration_seconds ?? job.config.capabilityValues.duration
   if (typeof configuredDuration === 'number' && configuredDuration > 0) return configuredDuration
   if (typeof configuredDuration === 'string') {
     const parsed = Number(configuredDuration.replace(/[^\d.]/g, ''))
@@ -59,33 +60,40 @@ function getJobDurationSeconds(job: GenerationJob): number {
 function buildTimelineTimes(durationSeconds: number): number[] {
   const duration = Math.max(0.5, durationSeconds)
   const lastFrame = Math.max(0.1, duration - 0.05)
-  return Array.from({ length: 6 }, (_, index) => {
-    if (index === 0) return 0.1
-    return Math.min(lastFrame, (lastFrame / 5) * index)
-  })
+  const wholeSeconds = Math.max(1, Math.ceil(duration))
+
+  return Array.from({ length: wholeSeconds }, (_, index) => Math.min(lastFrame, index))
+}
+
+function formatFrameTime(timeSeconds: number): string {
+  if (timeSeconds < 1) return '0s'
+  return `${Math.round(timeSeconds)}s`
 }
 
 export function VideoLightbox({
   job,
   isOpen,
-  onClose
+  onClose,
+  layoutId
 }: {
   job: GenerationJob
   isOpen: boolean
   onClose: () => void
+  layoutId?: string
 }): JSX.Element {
   const jobs = useGenerationStore((state) => state.jobs)
-  const { updateJob } = useGenerationStore()
   const { activeProjectId } = useProjectStore()
   const { addToast } = useAppStore()
   const [displayJobId, setDisplayJobId] = useState(job.id)
   const [submitting, setSubmitting] = useState(false)
-  const [extensionMode, setExtensionMode] = useState<'true_extend' | 'last_frame'>('true_extend')
   const [localPrompt, setLocalPrompt] = useState('')
   const [localModel, setLocalModel] = useState(job.model)
   const [resolvedVideoSrc, setResolvedVideoSrc] = useState('')
-  const [timelineFrames, setTimelineFrames] = useState<Array<{ timeSeconds: number; base64: string }>>([])
+  const [timelineFrames, setTimelineFrames] = useState<
+    Array<{ timeSeconds: number; base64: string }>
+  >([])
   const [timelineLoading, setTimelineLoading] = useState(false)
+  const [timelineOpen, setTimelineOpen] = useState(false)
   const [seekTo, setSeekTo] = useState<number | null>(null)
 
   const displayJob = useMemo(
@@ -118,7 +126,7 @@ export function VideoLightbox({
   }, [displayJob, isOpen])
 
   useEffect(() => {
-    if (!isOpen || displayJob.status !== 'completed' || !resolvedVideoSrc) {
+    if (!isOpen || !timelineOpen || displayJob.status !== 'completed' || !resolvedVideoSrc) {
       const resetTimer = window.setTimeout((): void => {
         setTimelineFrames([])
         setTimelineLoading(false)
@@ -136,7 +144,7 @@ export function VideoLightbox({
       for (const timeSeconds of times) {
         try {
           const base64 = await extractFrameAtTime(resolvedVideoSrc, timeSeconds)
-          if (cancelled) return
+          if (cancelled) break
           setTimelineFrames((frames) => [...frames, { timeSeconds, base64 }])
         } catch (error) {
           console.warn('Failed to extract timeline frame', error)
@@ -151,7 +159,7 @@ export function VideoLightbox({
     return () => {
       cancelled = true
     }
-  }, [displayJob, isOpen, resolvedVideoSrc])
+  }, [displayJob.id, displayJob.status, isOpen, resolvedVideoSrc, timelineOpen])
 
   // Determine if the video supports true Veo extension
   const isVeoExtendable = useMemo(() => {
@@ -162,21 +170,27 @@ export function VideoLightbox({
   }, [displayJob.model, displayJob.provider, displayJob.status])
 
   useEffect(() => {
-    if (isOpen) {
+    if (!isOpen) return
+
+    const resetTimer = window.setTimeout(() => {
       setDisplayJobId(job.id)
       setLocalPrompt('')
       setLocalModel(job.model)
+      setTimelineFrames([])
+      setTimelineLoading(false)
+      setTimelineOpen(window.localStorage.getItem(`manthan:video-frames:${job.id}`) === 'open')
+    }, 0)
 
-      // Fetch siblings if this job is part of a group
-      const rootId = job.groupId || job.id
-      if (window.manthan?.listGenerations) {
-        window.manthan.listGenerations({ groupId: rootId }).then((results) => {
-          const items = results?.items ?? []
-          if (items.length > 0) {
-            // Map StoredGeneration to GenerationJob
-            const groupJobs = items.map((g) => {
-              const storedConfig = g.config as Partial<GenerationJob['config']>
-              return {
+    // Fetch siblings if this job is part of a group
+    const rootId = job.groupId || job.id
+    if (window.manthan?.listGenerations) {
+      window.manthan.listGenerations({ groupId: rootId }).then((results) => {
+        const items = results?.items ?? []
+        if (items.length > 0) {
+          // Map StoredGeneration to GenerationJob
+          const groupJobs = items.map((g) => {
+            const storedConfig = g.config as Partial<GenerationJob['config']>
+            return {
               id: g.id,
               groupId: g.group_id ?? undefined,
               type: g.type,
@@ -208,26 +222,35 @@ export function VideoLightbox({
               startedAt: g.started_at,
               completedAt: g.completed_at ?? undefined
             }
-            })
-            useGenerationStore.getState().addJobs(groupJobs)
-          }
-        })
-      }
+          })
+          useGenerationStore.getState().addJobs(groupJobs)
+        }
+      })
     }
+
+    return () => window.clearTimeout(resetTimer)
   }, [isOpen, job])
 
   const handleDownload = async (): Promise<void> => {
     if (!displayJob.result || !window.manthan) return
+    const data =
+      displayJob.result.data ||
+      (displayJob.result.assetId ? await window.manthan.readAsset(displayJob.result.assetId) : null)
+    if (!data) return
     const ext = displayJob.result.mimeType.split('/')[1] || 'bin'
     await window.manthan.saveMedia(
-      displayJob.result.data,
-      `manthan-${displayJob.type}-${Date.now()}.${ext}`,
+      data,
+      buildMediaFilename(`manthan-${displayJob.type}`, displayJob.id, ext),
       displayJob.result.mimeType
     )
     addToast({
       title: 'Video downloaded',
       tone: 'success'
     })
+  }
+
+  function buildMediaFilename(prefix: string, id: string, ext: string): string {
+    return `${prefix}-${id.replace(/[^a-z0-9-]/gi, '-')}.${ext}`
   }
 
   // True Veo extension — sends full video binary
@@ -288,64 +311,8 @@ export function VideoLightbox({
     }
   }
 
-  // Last frame continue — extracts last frame → image-to-video
-  const handleLastFrameContinue = async (): Promise<void> => {
-    if (!localPrompt.trim() || !displayJob.result) return
-
-    const src = resolvedVideoSrc || (await resolveJobSrc(displayJob))
-    if (!src) return
-
-    setSubmitting(true)
-    try {
-      const base64Data = await extractFrameAtTime(src, Number.MAX_SAFE_INTEGER)
-
-      updateJob(displayJob.id, {
-        lastFrame: {
-          data: base64Data,
-          mimeType: 'image/webp'
-        }
-      })
-
-      const createdJobs = await enqueueGeneration({
-        groupId: displayJob.groupId || displayJob.id,
-        prompt: localPrompt.trim(),
-        negativePrompt: '',
-        selectedModel: localModel,
-        capabilityValues: displayJob.config.capabilityValues,
-        startFrame: {
-          data: base64Data,
-          mimeType: 'image/webp'
-        },
-        endFrame: null,
-        videoInput: null,
-        referenceImages: [],
-        batchCount: 1,
-        activeMode: 'frames',
-        activeProjectId
-      })
-
-      if (createdJobs[0]) {
-        useGenerationStore.getState().addJob(createdJobs[0])
-        setDisplayJobId(createdJobs[0].id)
-        setLocalPrompt('')
-      }
-    } catch (error) {
-      addToast({
-        title: 'Generation failed',
-        message: error instanceof Error ? error.message : String(error),
-        tone: 'error'
-      })
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
   const handleExtensionSubmit = async (): Promise<void> => {
-    if (extensionMode === 'true_extend' && isVeoExtendable) {
-      await handleExtendVideo()
-    } else {
-      await handleLastFrameContinue()
-    }
+    if (isVeoExtendable) await handleExtendVideo()
   }
 
   const handleSeekToFrame = (timeSeconds: number): void => {
@@ -360,7 +327,11 @@ export function VideoLightbox({
       projectId: activeProjectId ?? undefined,
       base64Data: frame.base64,
       mimeType: 'image/webp',
-      filename: `frame-${Math.round(frame.timeSeconds * 10) / 10}s-${Date.now()}.webp`,
+      filename: buildMediaFilename(
+        `frame-${Math.round(frame.timeSeconds * 10) / 10}s`,
+        displayJob.id,
+        'webp'
+      ),
       source: 'generated',
       metadata: {
         extractedFromVideo: displayJob.id,
@@ -373,6 +344,87 @@ export function VideoLightbox({
       title: 'Frame saved to dashboard',
       tone: 'success'
     })
+  }
+
+  const handleCopyFrame = async (frame: { base64: string }): Promise<void> => {
+    const dataUrl = `data:image/webp;base64,${frame.base64}`
+    try {
+      if ('ClipboardItem' in window) {
+        const blob = await fetch(dataUrl).then((response) => response.blob())
+        await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })])
+      } else {
+        await navigator.clipboard.writeText(dataUrl)
+      }
+      addToast({ title: 'Frame copied', tone: 'success' })
+    } catch {
+      await navigator.clipboard.writeText(dataUrl)
+      addToast({ title: 'Frame copied as data URL', tone: 'success' })
+    }
+  }
+
+  const handleDownloadFrame = async (frame: {
+    timeSeconds: number
+    base64: string
+  }): Promise<void> => {
+    if (!window.manthan) return
+    await window.manthan.saveMedia(
+      frame.base64,
+      buildMediaFilename(
+        `frame-${Math.round(frame.timeSeconds * 10) / 10}s`,
+        displayJob.id,
+        'webp'
+      ),
+      'image/webp'
+    )
+    addToast({ title: 'Frame downloaded', tone: 'success' })
+  }
+
+  const handleToggleTimeline = (): void => {
+    setTimelineOpen((open) => {
+      const next = !open
+      window.localStorage.setItem(`manthan:video-frames:${displayJob.id}`, next ? 'open' : 'closed')
+      return next
+    })
+  }
+
+  const handleAddJobToDashboard = async (groupJob: GenerationJob): Promise<void> => {
+    if (groupJob.result?.data && window.manthan) {
+      await window.manthan.saveAsset({
+        projectId: activeProjectId ?? undefined,
+        base64Data: groupJob.result.data,
+        mimeType: groupJob.result.mimeType,
+        filename: `extension-${groupJob.id}.${groupJob.result.mimeType.split('/')[1] || 'bin'}`,
+        source: 'generated',
+        metadata: {
+          generationId: groupJob.id,
+          prompt: groupJob.prompt,
+          model: groupJob.model
+        }
+      })
+    }
+    window.dispatchEvent(new CustomEvent('manthan:dashboard-refresh'))
+    addToast({ title: 'Added to dashboard', tone: 'success' })
+  }
+
+  const handleDownloadJob = async (groupJob: GenerationJob): Promise<void> => {
+    if (!groupJob.result || !window.manthan) return
+    const data =
+      groupJob.result.data ||
+      (groupJob.result.assetId ? await window.manthan.readAsset(groupJob.result.assetId) : null)
+    if (!data) return
+    const ext = groupJob.result.mimeType.split('/')[1] || 'bin'
+    await window.manthan.saveMedia(
+      data,
+      buildMediaFilename(`manthan-${groupJob.type}`, groupJob.id, ext),
+      groupJob.result.mimeType
+    )
+  }
+
+  const handleDeleteJob = async (groupJob: GenerationJob): Promise<void> => {
+    if (window.manthan?.deleteGeneration) await window.manthan.deleteGeneration(groupJob.id)
+    useGenerationStore.getState().removeJob(groupJob.id)
+    if (displayJobId === groupJob.id) setDisplayJobId(job.id)
+    window.dispatchEvent(new CustomEvent('manthan:dashboard-refresh'))
   }
 
   const handleClose = (): void => {
@@ -391,6 +443,7 @@ export function VideoLightbox({
           className="fixed inset-0 z-[110] flex items-center justify-center bg-black/75 p-6 backdrop-blur-md"
         >
           <motion.div
+            layoutId={layoutId}
             initial={{ opacity: 0, y: 24, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16, scale: 0.98 }}
@@ -421,131 +474,262 @@ export function VideoLightbox({
                       <p className="text-[11px] font-medium uppercase tracking-wider text-text-muted">
                         Frame Timeline
                       </p>
-                      {timelineLoading ? (
-                        <span className="text-[11px] text-text-muted">Extracting frames...</span>
-                      ) : null}
+                      <button
+                        type="button"
+                        onClick={handleToggleTimeline}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-text-secondary transition-colors hover:bg-white/10 hover:text-text-primary"
+                      >
+                        {timelineOpen ? 'Hide Frames' : 'Show Frames'}
+                        <ChevronDown
+                          className={cn(
+                            'h-3.5 w-3.5 transition-transform',
+                            timelineOpen ? 'rotate-180' : ''
+                          )}
+                        />
+                      </button>
                     </div>
-                    <div className="flex gap-2 overflow-x-auto pb-1">
-                      {timelineFrames.map((frame) => (
-                        <div
-                          key={`${displayJob.id}-${frame.timeSeconds}`}
-                          className="group/frame min-w-[7rem] overflow-hidden rounded-lg border border-white/10 bg-black/35"
+                    <AnimatePresence initial={false}>
+                      {timelineOpen ? (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          className="overflow-hidden"
                         >
-                          <button
-                            type="button"
-                            onClick={() => handleSeekToFrame(frame.timeSeconds)}
-                            className="relative block aspect-video w-full overflow-hidden"
-                          >
-                            <img
-                              src={`data:image/webp;base64,${frame.base64}`}
-                              alt={`${frame.timeSeconds.toFixed(1)}s`}
-                              className="h-full w-full object-cover transition-transform duration-200 group-hover/frame:scale-105"
-                            />
-                            <span className="absolute left-1.5 top-1.5 rounded bg-black/65 px-1.5 py-0.5 text-[10px] text-white/90">
-                              {frame.timeSeconds.toFixed(frame.timeSeconds < 1 ? 1 : 0)}s
-                            </span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void handleAddFrame(frame)}
-                            className="w-full bg-white/5 px-2 py-1.5 text-[10px] font-medium text-white/75 transition-colors hover:bg-white/10 hover:text-white"
-                          >
-                            Add to Dashboard
-                          </button>
-                        </div>
-                      ))}
-                      {timelineLoading && timelineFrames.length === 0 ? (
-                        <div className="flex h-[5.6rem] min-w-[7rem] items-center justify-center rounded-lg border border-white/10 bg-white/5">
-                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
-                        </div>
+                          <div className="flex gap-2 overflow-x-auto pb-1">
+                            {timelineFrames.map((frame) => (
+                              <div
+                                key={`${displayJob.id}-${frame.timeSeconds}`}
+                                className="group/frame w-[6.75rem] min-w-[6.75rem] overflow-hidden rounded-md border border-white/10 bg-black/35"
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => handleSeekToFrame(frame.timeSeconds)}
+                                  className="relative block aspect-video w-full overflow-hidden"
+                                >
+                                  <img
+                                    loading="lazy"
+                                    src={`data:image/webp;base64,${frame.base64}`}
+                                    alt={`${frame.timeSeconds.toFixed(1)}s`}
+                                    className="h-full w-full object-cover transition-transform duration-200 group-hover/frame:scale-105"
+                                  />
+                                  <span className="absolute left-1 top-1 rounded bg-black/65 px-1 py-0.5 text-[9px] text-white/90">
+                                    {formatFrameTime(frame.timeSeconds)}
+                                  </span>
+                                  <span className="absolute inset-x-1 bottom-1 flex items-center justify-center gap-0.5 rounded-md bg-black/65 p-0.5 opacity-100 backdrop-blur-md transition-opacity sm:opacity-0 sm:group-hover/frame:opacity-100">
+                                    <span
+                                      role="button"
+                                      tabIndex={0}
+                                      onClick={(event) => {
+                                        event.stopPropagation()
+                                        void handleAddFrame(frame)
+                                      }}
+                                      className="flex h-5 w-5 items-center justify-center rounded text-white/80 transition-colors hover:bg-white/15 hover:text-white"
+                                    >
+                                      <Plus className="h-3 w-3" />
+                                    </span>
+                                    <span
+                                      role="button"
+                                      tabIndex={0}
+                                      onClick={(event) => {
+                                        event.stopPropagation()
+                                        void handleCopyFrame(frame)
+                                      }}
+                                      className="flex h-5 w-5 items-center justify-center rounded text-white/80 transition-colors hover:bg-white/15 hover:text-white"
+                                    >
+                                      <Copy className="h-3 w-3" />
+                                    </span>
+                                    <span
+                                      role="button"
+                                      tabIndex={0}
+                                      onClick={(event) => {
+                                        event.stopPropagation()
+                                        void handleDownloadFrame(frame)
+                                      }}
+                                      className="flex h-5 w-5 items-center justify-center rounded text-white/80 transition-colors hover:bg-white/15 hover:text-white"
+                                    >
+                                      <Download className="h-3 w-3" />
+                                    </span>
+                                  </span>
+                                </button>
+                              </div>
+                            ))}
+                            {timelineLoading && timelineFrames.length === 0 ? (
+                              <div className="flex aspect-video w-[6.75rem] min-w-[6.75rem] items-center justify-center rounded-md border border-white/10 bg-white/5">
+                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
+                              </div>
+                            ) : null}
+                            {timelineLoading && timelineFrames.length > 0 ? (
+                              <span className="self-center whitespace-nowrap px-2 text-[11px] text-text-muted">
+                                Extracting frames...
+                              </span>
+                            ) : null}
+                          </div>
+                        </motion.div>
                       ) : null}
-                    </div>
+                    </AnimatePresence>
                   </div>
                 ) : null}
 
-                <div className="flex flex-col gap-3 max-w-3xl mx-auto w-full">
-                  <div className="flex bg-white/5 rounded-xl p-1 gap-1 self-start mb-0.5">
-                    {isVeoExtendable ? (
-                      <button 
-                        onClick={() => setExtensionMode('true_extend')}
-                        className={cn(
-                          "px-4 py-1.5 rounded-lg text-xs font-medium transition-all",
-                          extensionMode === 'true_extend' ? "bg-white text-black shadow-sm" : "text-text-muted hover:text-text-primary"
-                        )}
-                      >
+                {isVeoExtendable ? (
+                  <div className="flex flex-col gap-3 max-w-3xl mx-auto w-full">
+                    <div className="flex bg-white/5 rounded-xl p-1 gap-1 self-start mb-0.5">
+                      <span className="px-4 py-1.5 rounded-lg bg-white text-xs font-medium text-black shadow-sm">
                         Extend Video
-                      </button>
-                    ) : null}
-                    <button 
-                      onClick={() => setExtensionMode('last_frame')}
-                      className={cn(
-                        "px-4 py-1.5 rounded-lg text-xs font-medium transition-all",
-                        extensionMode === 'last_frame' ? "bg-white text-black shadow-sm" : "text-text-muted hover:text-text-primary"
-                      )}
-                    >
-                      Last Frame Extend
-                    </button>
+                      </span>
+                    </div>
+                    <PromptInput
+                      variant="lightbox"
+                      value={localPrompt}
+                      onChange={setLocalPrompt}
+                      selectedModel={localModel}
+                      onModelChange={setLocalModel}
+                      onSubmit={isCompleted && !submitting ? handleExtensionSubmit : undefined}
+                    />
                   </div>
-                  <PromptInput 
-                    variant="lightbox" 
-                    value={localPrompt}
-                    onChange={setLocalPrompt}
-                    selectedModel={localModel}
-                    onModelChange={setLocalModel}
-                    onSubmit={isCompleted && !submitting ? handleExtensionSubmit : undefined}
-                  />
-                </div>
+                ) : null}
               </div>
 
               <div className="flex flex-col border-l border-border bg-bg-secondary/30 w-full h-full">
                 <div className="p-5 border-b border-border/50 space-y-2">
-                   <p className="text-xs font-medium text-text-muted uppercase tracking-wider">Active Generation</p>
-                   <p className="text-xs leading-relaxed text-text-secondary line-clamp-3">{displayJob.prompt}</p>
-                   <div className="flex justify-between items-center text-[10px] text-text-muted mt-2">
-                     <span>{formatJobConfig(displayJob)}</span>
-                     <button 
-                      onClick={() => void handleDownload()} 
+                  <p className="text-xs font-medium text-text-muted uppercase tracking-wider">
+                    Active Generation
+                  </p>
+                  <p className="text-xs leading-relaxed text-text-secondary line-clamp-3">
+                    {displayJob.prompt}
+                  </p>
+                  <div className="flex justify-between items-center text-[10px] text-text-muted mt-2">
+                    <span>{formatJobConfig(displayJob)}</span>
+                    <button
+                      onClick={() => void handleDownload()}
                       className="hover:text-text-primary transition-colors"
-                     >
-                       <Download className="h-3.5 w-3.5" />
-                     </button>
-                   </div>
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-5 space-y-4">
-                  <p className="text-[11px] font-medium text-text-muted uppercase tracking-wider mb-2">Extension Timeline</p>
-                  
+                  <p className="text-[11px] font-medium text-text-muted uppercase tracking-wider mb-2">
+                    Extension Timeline
+                  </p>
+
                   {groupJobs.map((groupJob, index) => {
                     const isSelected = groupJob.id === displayJobId
+                    const createdAt = new Date(
+                      groupJob.completedAt ?? groupJob.startedAt
+                    ).toLocaleString(undefined, {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: 'numeric',
+                      minute: '2-digit'
+                    })
                     return (
-                      <div 
+                      <div
                         key={groupJob.id}
                         onClick={() => setDisplayJobId(groupJob.id)}
-                        className={`relative group cursor-pointer rounded-xl overflow-hidden border-2 transition-all ${
-                          isSelected ? "border-amber-500/80 shadow-[0_0_15px_rgba(245,158,11,0.15)]" : "border-border/50 hover:border-white/20"
-                        }`}
+                        className={cn(
+                          'group cursor-pointer overflow-hidden rounded-xl border bg-bg-elevated/60 transition-all',
+                          isSelected
+                            ? 'border-accent/70 shadow-[0_0_0_1px_rgba(90,184,255,0.18)]'
+                            : 'border-border-subtle hover:border-border'
+                        )}
                       >
-                         <div className="aspect-video bg-black relative">
-                            {groupJob.result?.thumbnailPath ? (
-                              <img 
-                                src={`asset:///${groupJob.result.thumbnailPath.replace(/\\/g, '/')}`}
-                                alt="Thumbnail" 
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center bg-bg-elevated text-text-muted">
-                                <Film className="w-6 h-6 opacity-30" />
-                              </div>
-                            )}
-                            {groupJob.status === 'generating' ? (
-                               <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-text-muted text-xs font-medium">
-                                 Generating...
-                               </div>
-                            ) : null}
-                         </div>
-                         <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-md text-white text-[10px] px-2 py-0.5 rounded-full font-medium">
-                           Part {index + 1}
-                         </div>
+                        <div className="aspect-video bg-black relative">
+                          {groupJob.result?.thumbnailPath ? (
+                            <img
+                              src={`asset:///${groupJob.result.thumbnailPath.replace(/\\/g, '/')}`}
+                              alt="Thumbnail"
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-bg-elevated text-text-muted">
+                              <Film className="w-6 h-6 opacity-30" />
+                            </div>
+                          )}
+                          {groupJob.status === 'generating' || groupJob.status === 'queued' ? (
+                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-text-muted text-xs font-medium">
+                              Generating...
+                            </div>
+                          ) : null}
+                          <div className="absolute left-2 top-2 bg-black/60 backdrop-blur-md text-white text-[10px] px-2 py-0.5 rounded-full font-medium">
+                            Part {index + 1}
+                          </div>
+                          <div className="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-medium capitalize text-white/85 backdrop-blur-md">
+                            {groupJob.status}
+                          </div>
+                          {typeof groupJob.config.capabilityValues.duration === 'number' ? (
+                            <div className="absolute bottom-2 right-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] text-white/85 backdrop-blur-md">
+                              {groupJob.config.capabilityValues.duration}s
+                            </div>
+                          ) : null}
+                        </div>
+                        <div className="space-y-2 p-3">
+                          <p className="line-clamp-2 text-xs leading-5 text-text-secondary">
+                            {groupJob.prompt}
+                          </p>
+                          <div className="flex items-center justify-between gap-2 text-[10px] text-text-muted">
+                            <span className="truncate">{groupJob.model}</span>
+                            <span className="shrink-0">{createdAt}</span>
+                          </div>
+                          <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                void handleAddJobToDashboard(groupJob)
+                              }}
+                              className="flex h-7 w-7 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary"
+                              aria-label="Add to dashboard"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                setLocalPrompt(groupJob.prompt)
+                              }}
+                              className="flex h-7 w-7 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary"
+                              aria-label="Reuse prompt"
+                            >
+                              <RotateCcw className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                void navigator.clipboard.writeText(groupJob.prompt)
+                              }}
+                              className="flex h-7 w-7 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary"
+                              aria-label="Copy prompt"
+                            >
+                              <Copy className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                void handleDownloadJob(groupJob)
+                              }}
+                              className="flex h-7 w-7 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary"
+                              aria-label="Download"
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                void handleDeleteJob(groupJob)
+                              }}
+                              className="ml-auto flex h-7 w-7 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-error/10 hover:text-error"
+                              aria-label="Delete"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     )
                   })}

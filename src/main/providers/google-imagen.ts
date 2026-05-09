@@ -142,9 +142,16 @@ export class GoogleImagenProvider implements MediaProvider {
         config.thinkingConfig = { thinkingLevel: params.thinkingLevel }
       }
 
-      if (params.webSearchGrounding) {
+      if (params.webSearchGrounding || params.imageSearchGrounding) {
         config.tools = config.tools || []
-        config.tools.push({ googleSearch: {} })
+        config.tools.push({
+          googleSearch: {
+            searchTypes: {
+              ...(params.webSearchGrounding ? { webSearch: {} } : {}),
+              ...(params.imageSearchGrounding ? { imageSearch: {} } : {})
+            }
+          }
+        })
       }
 
       // DRY RUN: Log and intercept if enabled in preferences
@@ -170,6 +177,7 @@ export class GoogleImagenProvider implements MediaProvider {
       const parts = response.candidates?.[0]?.content?.parts || []
       const images: Array<{ data: string; mimeType: string }> = []
       let thoughtSignature: string | undefined
+      const groundingMetadata = response.candidates?.[0]?.groundingMetadata
 
       for (const part of parts) {
         if (part.inlineData) {
@@ -196,7 +204,8 @@ export class GoogleImagenProvider implements MediaProvider {
           mimeType: finalImage.mimeType,
           metadata: {
             images,
-            thoughtSignature
+            thoughtSignature,
+            groundingMetadata
           }
         }
       }
