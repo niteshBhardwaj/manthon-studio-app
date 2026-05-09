@@ -17,7 +17,7 @@ const navItems = [
   { id: 'assets' as const, icon: FolderOpen, label: 'Assets' },
   { id: 'templates' as const, icon: Sparkles, label: 'Templates' },
   { id: 'db-explorer' as const, icon: Database, label: 'DB Explorer', devOnly: true },
-  { id: 'api-logs' as const, icon: Terminal, label: 'API Logs', devOnly: true }
+  { id: 'api-logs' as const, icon: Terminal, label: 'API Logs', devOnly: true, dryRunOnly: true }
 ]
 
 export function Sidebar(): JSX.Element {
@@ -43,7 +43,12 @@ export function Sidebar(): JSX.Element {
             transition={{ type: 'spring', bounce: 0.2, duration: 0.4 }}
           >
             {navItems
-              .filter((item) => !item.devOnly || isDev)
+              .filter((item) => {
+                if (item.devOnly && !isDev) return false
+                // @ts-ignore - dynamic property
+                if (item.dryRunOnly && !useAppStore.getState().isDryRun) return false
+                return true
+              })
               .map((item) => {
                 const Icon = item.icon
                 const isActive = activeSidebarTab === item.id

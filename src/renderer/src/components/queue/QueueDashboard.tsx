@@ -13,7 +13,8 @@ import {
   Image as ImageIcon,
   Music,
   XCircle,
-  ExternalLink
+  ExternalLink,
+  Terminal
 } from 'lucide-react'
 import type { QueueJob } from '../../../../main/queue/types'
 import { useQueueStore } from '../../stores/queue-store'
@@ -169,7 +170,10 @@ function CompletedJobPreview({ job }: { job: QueueJob }): JSX.Element {
   return <img src={preview} alt={job.prompt} className="h-14 w-14 rounded-2xl object-cover" />
 }
 
-type Tab = 'all' | 'active' | 'completed' | 'failed'
+type Tab = 'all' | 'active' | 'completed' | 'failed' | 'dry'
+
+const isDryRunJob = (job: QueueJob): boolean =>
+  job.status === 'failed' && Boolean(job.error?.toLowerCase().includes('dry run'))
 
 export function QueueDashboard(): JSX.Element {
   const {
@@ -182,7 +186,7 @@ export function QueueDashboard(): JSX.Element {
     clearCompleted,
     deleteJob
   } = useQueueStore()
-  const { setSidebarTab } = useAppStore()
+  const { isDryRun: isDryModeActive, setSidebarTab } = useAppStore()
   const { jobs: mediaJobs, addJob, setActiveJob } = useGenerationStore()
   const [activeTab, setActiveTab] = useState<Tab>('all')
 
@@ -201,7 +205,7 @@ export function QueueDashboard(): JSX.Element {
         .sort((a, b) => (b.completed_at ?? 0) - (a.completed_at ?? 0)),
     [jobs]
   )
-  const failedJobs = useMemo(
+  const allFailedJobs = useMemo(
     () =>
       [...jobs]
         .filter((job) => job.status === 'failed')
@@ -209,10 +213,13 @@ export function QueueDashboard(): JSX.Element {
     [jobs]
   )
 
+  const dryJobs = useMemo(() => allFailedJobs.filter(isDryRunJob), [allFailedJobs])
+  const failedJobs = useMemo(() => allFailedJobs.filter((j) => !isDryRunJob(j)), [allFailedJobs])
+
   const activeJobs = useMemo(() => [...runningJobs, ...pendingJobs], [runningJobs, pendingJobs])
 
   const allJobs = useMemo(() => {
-    return [...runningJobs, ...pendingJobs, ...completedJobs, ...failedJobs].sort((a, b) => {
+    return [...runningJobs, ...pendingJobs, ...completedJobs, ...allFailedJobs].sort((a, b) => {
       if (a.status === 'running' && b.status !== 'running') return -1
       if (b.status === 'running' && a.status !== 'running') return 1
 
@@ -226,7 +233,7 @@ export function QueueDashboard(): JSX.Element {
       const timeB = b.completed_at ?? b.created_at
       return timeB - timeA
     })
-  }, [runningJobs, pendingJobs, completedJobs, failedJobs])
+  }, [runningJobs, pendingJobs, completedJobs, allFailedJobs])
 
   const filteredJobs = useMemo(() => {
     switch (activeTab) {
@@ -236,10 +243,12 @@ export function QueueDashboard(): JSX.Element {
         return completedJobs
       case 'failed':
         return failedJobs
+      case 'dry':
+        return dryJobs
       default:
         return allJobs
     }
-  }, [activeTab, activeJobs, completedJobs, failedJobs, allJobs])
+  }, [activeTab, activeJobs, completedJobs, failedJobs, dryJobs, allJobs])
 
   const handleView = async (job: QueueJob): Promise<void> => {
     const existing = mediaJobs.find((item) => item.id === job.id)
@@ -280,11 +289,18 @@ export function QueueDashboard(): JSX.Element {
     setSidebarTab('create')
   }
 
-  const tabs: { id: Tab; label: string; count?: number; icon: any }[] = [
+  const tabs: { id: Tab; label: string; count?: number; icon: any; hidden?: boolean }[] = [
     { id: 'all', label: 'All Items', count: allJobs.length, icon: ListOrdered },
     { id: 'active', label: 'Active', count: activeJobs.length, icon: RefreshCw },
     { id: 'completed', label: 'Completed', count: completedJobs.length, icon: CheckCircle2 },
-    { id: 'failed', label: 'Failed', count: failedJobs.length, icon: XCircle }
+    { id: 'failed', label: 'Failed', count: failedJobs.length, icon: XCircle },
+    {
+      id: 'dry',
+      label: 'API Dry Run',
+      count: dryJobs.length,
+      icon: Terminal,
+      hidden: !isDryModeActive && dryJobs.length === 0
+    }
   ]
 
   return (
@@ -325,40 +341,44 @@ export function QueueDashboard(): JSX.Element {
 
         <div className="flex w-full items-center justify-between gap-4 overflow-x-auto rounded-2xl border border-border-subtle bg-bg-elevated/30 p-1 backdrop-blur-md">
           <div className="flex flex-1 items-center gap-1">
-            {tabs.map((tab) => {
-              const Icon = tab.icon
-              const isActive = activeTab === tab.id
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={cn(
-                    'relative flex h-10 flex-1 items-center justify-center gap-2 px-4 text-sm font-medium transition-all duration-200',
-                    isActive ? 'text-text-primary' : 'text-text-muted hover:text-text-secondary'
-                  )}
-                >
-                  <Icon className={cn('h-4 w-4', isActive && 'text-accent')} />
-                  <span className="hidden sm:inline">{tab.label}</span>
-                  {tab.count !== undefined && tab.count > 0 && (
-                    <span
-                      className={cn(
-                        'ml-1 flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold',
-                        isActive ? 'bg-accent text-accent-foreground' : 'bg-bg-elevated text-text-muted'
-                      )}
-                    >
-                      {tab.count}
-                    </span>
-                  )}
-                  {isActive && (
-                    <motion.div
-                      layoutId="activeTab"
-                      className="absolute inset-0 z-[-1] rounded-xl bg-bg-elevated/60 shadow-sm"
-                      transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
-                    />
-                  )}
-                </button>
-              )
-            })}
+            {tabs
+              .filter((t) => !t.hidden)
+              .map((tab) => {
+                const Icon = tab.icon
+                const isActive = activeTab === tab.id
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={cn(
+                      'relative flex h-10 flex-1 items-center justify-center gap-2 px-4 text-sm font-medium transition-all duration-200',
+                      isActive ? 'text-text-primary' : 'text-text-muted hover:text-text-secondary'
+                    )}
+                  >
+                    <Icon className={cn('h-4 w-4', isActive && 'text-accent')} />
+                    <span className="hidden sm:inline">{tab.label}</span>
+                    {tab.count !== undefined && tab.count > 0 && (
+                      <span
+                        className={cn(
+                          'ml-1 flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold',
+                          isActive
+                            ? 'bg-accent text-accent-foreground'
+                            : 'bg-bg-elevated text-text-muted'
+                        )}
+                      >
+                        {tab.count}
+                      </span>
+                    )}
+                    {isActive && (
+                      <motion.div
+                        layoutId="activeTab"
+                        className="absolute inset-0 z-[-1] rounded-xl bg-bg-elevated/60 shadow-sm"
+                        transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
+                      />
+                    )}
+                  </button>
+                )
+              })}
           </div>
         </div>
 
@@ -418,6 +438,7 @@ function JobItem({
   const isPending = job.status === 'pending'
   const isCompleted = job.status === 'completed'
   const isFailed = job.status === 'failed'
+  const isDryRun = isDryRunJob(job)
 
   return (
     <motion.div
@@ -428,7 +449,8 @@ function JobItem({
       className={cn(
         'group relative overflow-hidden rounded-[24px] border border-border-subtle bg-bg-elevated/40 p-4 transition-all hover:bg-bg-elevated/60',
         isRunning && 'border-accent/30 bg-accent/5',
-        isFailed && 'border-error/30 bg-error/5'
+        isFailed && !isDryRun && 'border-error/30 bg-error/5',
+        isDryRun && 'border-amber-500/30 bg-amber-500/5'
       )}
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -440,13 +462,16 @@ function JobItem({
               className={cn(
                 'flex h-14 w-14 items-center justify-center rounded-2xl bg-bg-elevated transition-colors group-hover:bg-bg-elevated/80',
                 isRunning && 'bg-accent/10 text-accent',
-                isFailed && 'bg-error/10 text-error'
+                isFailed && !isDryRun && 'bg-error/10 text-error',
+                isDryRun && 'bg-amber-500/10 text-amber-400'
               )}
             >
               {isRunning ? (
                 <RefreshCw className="h-6 w-6 animate-spin" style={{ animationDuration: '3s' }} />
-              ) : isFailed ? (
+              ) : isFailed && !isDryRun ? (
                 <XCircle className="h-6 w-6" />
+              ) : isDryRun ? (
+                <Terminal className="h-6 w-6" />
               ) : (
                 mediaIcon(job.type)
               )}
@@ -465,20 +490,19 @@ function JobItem({
               className={cn(
                 'flex items-center gap-1 capitalize',
                 isRunning && 'text-accent',
-                isFailed && 'text-error',
+                isFailed && !isDryRun && 'text-error',
+                isDryRun && 'text-amber-400',
                 isCompleted && 'text-emerald-400'
               )}
             >
               {isCompleted && <CheckCircle2 className="h-3 w-3" />}
-              {isFailed && <XCircle className="h-3 w-3" />}
+              {isFailed && !isDryRun && <XCircle className="h-3 w-3" />}
+              {isDryRun && <Terminal className="h-3 w-3" />}
               {isRunning && (
-                <RefreshCw
-                  className="h-3 w-3 animate-spin"
-                  style={{ animationDuration: '3s' }}
-                />
+                <RefreshCw className="h-3 w-3 animate-spin" style={{ animationDuration: '3s' }} />
               )}
               {isPending && <ListOrdered className="h-3 w-3" />}
-              {job.status}
+              {isDryRun ? 'Dry Run' : job.status}
             </span>
             <span>·</span>
             <span className="flex items-center gap-1">
@@ -500,9 +524,11 @@ function JobItem({
               <span>Finished {formatRelativeTime(job.completed_at)}</span>
             ) : isFailed ? (
               <div className="flex items-center gap-2">
-                <span>Failed {formatRelativeTime(job.completed_at)}</span>
+                <span>{isDryRun ? 'Intercepted' : 'Failed'} {formatRelativeTime(job.completed_at)}</span>
                 <span>·</span>
-                <span className="text-error">{job.error || 'Generation failed'}</span>
+                <span className={cn(isDryRun ? 'text-amber-400/80' : 'text-error')}>
+                  {isDryRun ? 'API Payload Logged' : (job.error || 'Generation failed')}
+                </span>
               </div>
             ) : (
               <span>Queued {formatRelativeTime(job.created_at)}</span>
@@ -524,7 +550,7 @@ function JobItem({
             </Button>
           )}
 
-          {isFailed && (
+          {(isFailed && !isDryRun) && (
             <>
               <Button
                 variant="outline"
@@ -544,6 +570,18 @@ function JobItem({
                 <Trash2 className="h-4 w-4" />
               </Button>
             </>
+          )}
+
+          {isDryRun && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 rounded-xl border-border-subtle bg-bg-elevated/50 hover:bg-amber-500 hover:text-white"
+              onClick={onRetry}
+            >
+              <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+              Run Again
+            </Button>
           )}
 
           {(isRunning || isPending) && (
@@ -572,4 +610,5 @@ function JobItem({
     </motion.div>
   )
 }
+
 

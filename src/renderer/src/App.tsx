@@ -62,6 +62,7 @@ function App(): JSX.Element {
     void Promise.all([fetchProviders(), loadEnabledModels(), initializeQueue()])
     void window.manthan?.getPreferences().then((preferences) => {
       setPlayCompletionSound(Boolean(preferences.playCompletionSound ?? true))
+      useAppStore.getState().setIsDryRun(Boolean(preferences.dryRun))
     })
     void window.manthan?.isDev().then((dev) => {
       setIsDev(dev)

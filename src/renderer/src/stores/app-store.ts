@@ -50,6 +50,8 @@ interface AppState {
   // Dev
   isDev: boolean
   setIsDev: (value: boolean) => void
+  isDryRun: boolean
+  setIsDryRun: (value: boolean) => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -101,5 +103,7 @@ export const useAppStore = create<AppState>((set) => ({
 
   // Dev
   isDev: false,
-  setIsDev: (value) => set({ isDev: value })
+  setIsDev: (value) => set({ isDev: value }),
+  isDryRun: false,
+  setIsDryRun: (value) => set({ isDryRun: value })
 }))

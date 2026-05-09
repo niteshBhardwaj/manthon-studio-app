@@ -54,6 +54,7 @@ export function ApiKeyManager(): JSX.Element {
     const newValue = !dryRun
     await window.manthan?.setPreference('dryRun', newValue)
     setDryRun(newValue)
+    useAppStore.getState().setIsDryRun(newValue)
   }
 
   const modelsByType = useMemo(
