@@ -65,7 +65,7 @@ export interface StoredGeneration {
 
 // ── Default templates (seeded into DB if empty) ──────────────
 
-const DEFAULT_TEMPLATES: Template[] = [
+export const DEFAULT_TEMPLATES: Template[] = [
   {
     id: 'cinematic',
     name: 'Cinematic',
@@ -103,7 +103,7 @@ const DEFAULT_TEMPLATES: Template[] = [
   }
 ]
 
-const DEFAULT_PREFERENCES: Preferences = {
+export const DEFAULT_PREFERENCES: Preferences = {
   theme: 'dark',
   sidebarCollapsed: false,
   defaultProvider: null,

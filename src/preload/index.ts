@@ -78,6 +78,8 @@ const manthanAPI = {
     ipcRenderer.invoke('storage:set-policy', policy),
   applyRetentionPolicy: (policy?: Record<string, unknown>) =>
     ipcRenderer.invoke('storage:apply-policy', policy),
+  resetFiles: () => ipcRenderer.invoke('app:reset-files'),
+  resetFactory: () => ipcRenderer.invoke('app:reset-factory'),
 
   saveMedia: (data: string, filename: string, mimeType: string) =>
     ipcRenderer.invoke('file:save', data, filename, mimeType),

@@ -20,6 +20,7 @@ import { logger } from '../logger'
 import { googleAuth } from '../backup/google-auth'
 import { backupManager } from '../backup/backup-manager'
 import { restoreManager } from '../backup/restore-manager'
+import { resetManager } from '../store/reset-manager'
 
 function summarizeArgs(args: any[]): any {
   return args.map(arg => {
@@ -541,6 +542,14 @@ export function registerIpcHandlers(): void {
 
   logIpcHandler('storage:apply-policy', async (_event, policy) => {
     return storageManager.applyRetentionPolicy(policy)
+  })
+
+  logIpcHandler('app:reset-files', async () => {
+    return resetManager.resetFilesOnly()
+  })
+
+  logIpcHandler('app:reset-factory', async () => {
+    return resetManager.resetEverything()
   })
 
   // ── Projects ─────────────────────────────────────────────

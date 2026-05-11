@@ -9,8 +9,11 @@ import {
   Image as ImageIcon,
   Loader2,
   Music,
+  RotateCcw,
   Settings2,
   Terminal,
+  Trash2,
+  TriangleAlert,
   Video
 } from 'lucide-react'
 import { useAppStore } from '../../stores/app-store'
@@ -25,7 +28,7 @@ import { StorageDashboard } from './StorageDashboard'
 import { BackupSettings } from './BackupSettings'
 import { useEffect } from 'react'
 
-type SettingsTab = 'models' | 'keys' | 'storage' | 'backup' | 'developer'
+type SettingsTab = 'models' | 'keys' | 'storage' | 'backup' | 'reset' | 'developer'
 
 const contentTypeMeta: Record<ContentType, { label: string; icon: typeof ImageIcon }> = {
   image: { label: 'Image Models', icon: ImageIcon },
@@ -34,7 +37,7 @@ const contentTypeMeta: Record<ContentType, { label: string; icon: typeof ImageIc
 }
 
 export function ApiKeyManager(): JSX.Element {
-  const { closeModal, isDev } = useAppStore()
+  const { addToast, closeModal, isDev } = useAppStore()
   const { enabledModelIds, toggleModel } = useModelStore()
   const { providers, updateProviderStatus, fetchProviders } = useProviderStore()
   const [activeTab, setActiveTab] = useState<SettingsTab>('models')
@@ -43,6 +46,9 @@ export function ApiKeyManager(): JSX.Element {
   const [testingGroups, setTestingGroups] = useState<Record<string, boolean>>({})
   const [savingGroups, setSavingGroups] = useState<Record<string, boolean>>({})
   const [dryRun, setDryRun] = useState(false)
+  const [filesConfirm, setFilesConfirm] = useState('')
+  const [factoryConfirm, setFactoryConfirm] = useState('')
+  const [resetLoading, setResetLoading] = useState<'files' | 'factory' | null>(null)
 
   useEffect(() => {
     window.manthan?.getPreferences().then(prefs => {
@@ -50,11 +56,55 @@ export function ApiKeyManager(): JSX.Element {
     })
   }, [])
 
-  const handleDryRunToggle = async () => {
+  const handleDryRunToggle = async (): Promise<void> => {
     const newValue = !dryRun
     await window.manthan?.setPreference('dryRun', newValue)
     setDryRun(newValue)
     useAppStore.getState().setIsDryRun(newValue)
+  }
+
+  const handleFilesReset = async (): Promise<void> => {
+    if (filesConfirm !== 'DELETE' || resetLoading) return
+    setResetLoading('files')
+    try {
+      await window.manthan.resetFiles()
+      addToast({
+        title: 'Reset started',
+        message: 'Files are being deleted and the app will restart.',
+        tone: 'info'
+      })
+    } catch (error) {
+      setResetLoading(null)
+      addToast({
+        title: 'Reset failed',
+        message: error instanceof Error ? error.message : 'Could not reset application files.',
+        tone: 'error'
+      })
+    }
+  }
+
+  const handleFactoryReset = async (): Promise<void> => {
+    if (factoryConfirm !== 'RESET' || resetLoading) return
+    setResetLoading('factory')
+    try {
+      const result = await window.manthan.resetFactory()
+      if (result.canceled) {
+        setResetLoading(null)
+        return
+      }
+      addToast({
+        title: 'Factory reset started',
+        message: 'All local data is being erased and the app will restart.',
+        tone: 'info'
+      })
+    } catch (error) {
+      setResetLoading(null)
+      addToast({
+        title: 'Factory reset failed',
+        message: error instanceof Error ? error.message : 'Could not complete factory reset.',
+        tone: 'error'
+      })
+    }
   }
 
   const modelsByType = useMemo(
@@ -114,6 +164,7 @@ export function ApiKeyManager(): JSX.Element {
                 { id: 'keys', label: 'Keys', icon: Check },
                 { id: 'storage', label: 'Storage', icon: HardDrive },
                 { id: 'backup', label: 'Backup & Sync', icon: Cloud },
+                { id: 'reset', label: 'Reset', icon: RotateCcw },
                 ...(isDev ? [{ id: 'developer', label: 'Developer', icon: FlaskConical }] : [])
               ] as const
             ).map(({ id, label, icon: Icon }) => (
@@ -356,6 +407,98 @@ export function ApiKeyManager(): JSX.Element {
             <StorageDashboard />
           ) : activeTab === 'backup' ? (
             <BackupSettings />
+          ) : activeTab === 'reset' ? (
+            <div className="space-y-4">
+              <section className="rounded-lg border border-red-500/25 bg-red-500/10 p-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-500/15 text-red-200">
+                    <Trash2 className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-semibold text-red-100">Delete All Files</h3>
+                    <p className="mt-1 text-xs leading-5 text-red-100/75">
+                      Permanently removes generated, imported, and uploaded media, clears the queue,
+                      history, API logs, costs, variables, custom projects, and custom prompt presets.
+                    </p>
+                    <div className="mt-3 rounded-lg border border-red-400/15 bg-black/20 p-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-red-100/70">
+                        Preserved
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-red-100/75">
+                        API keys, Google Drive credentials, theme, enabled models, log level, and
+                        other preferences stay in place. Please create a Google Drive backup first
+                        if you need these media files later.
+                      </p>
+                    </div>
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+                      <Input
+                        value={filesConfirm}
+                        onChange={(event) => setFilesConfirm(event.target.value)}
+                        placeholder='Type "DELETE"'
+                        disabled={resetLoading !== null}
+                        className="h-10 rounded-lg border-red-400/20 bg-black/20 text-xs text-red-50 placeholder:text-red-100/35"
+                      />
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        disabled={filesConfirm !== 'DELETE' || resetLoading !== null}
+                        className="h-10 rounded-lg px-4 text-xs"
+                        onClick={handleFilesReset}
+                      >
+                        {resetLoading === 'files' ? (
+                          <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                        ) : null}
+                        Delete Files
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="rounded-lg border border-red-400/40 bg-red-950/45 p-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-500/20 text-red-100">
+                    <TriangleAlert className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-semibold text-red-50">Full Factory Reset</h3>
+                    <p className="mt-1 text-xs leading-5 text-red-50/75">
+                      Erases everything under local app data, including API keys, Google Drive
+                      credentials, preferences, projects, media, and the SQLite database. Manthan
+                      Studio will reopen like a first launch.
+                    </p>
+                    <div className="mt-3 rounded-lg border border-red-300/20 bg-black/25 p-3">
+                      <p className="text-xs leading-5 text-red-50/80">
+                        After typing RESET, a final native system confirmation appears before
+                        anything is deleted. Back up to Google Drive first if you want a recovery
+                        path.
+                      </p>
+                    </div>
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+                      <Input
+                        value={factoryConfirm}
+                        onChange={(event) => setFactoryConfirm(event.target.value)}
+                        placeholder='Type "RESET"'
+                        disabled={resetLoading !== null}
+                        className="h-10 rounded-lg border-red-300/25 bg-black/25 text-xs text-red-50 placeholder:text-red-100/35"
+                      />
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        disabled={factoryConfirm !== 'RESET' || resetLoading !== null}
+                        className="h-10 rounded-lg px-4 text-xs"
+                        onClick={handleFactoryReset}
+                      >
+                        {resetLoading === 'factory' ? (
+                          <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                        ) : null}
+                        Factory Reset
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
           ) : (
             <div className="space-y-6">
               <section className="space-y-3">
@@ -409,7 +552,7 @@ export function ApiKeyManager(): JSX.Element {
 
               <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-4">
                 <p className="text-[11px] text-amber-200/80 leading-relaxed">
-                  <strong>Note:</strong> Dry-run logs can be viewed in the "API Logs" tab on the sidebar. 
+                  <strong>Note:</strong> Dry-run logs can be viewed in the API Logs tab on the sidebar. 
                   This feature is only available in development mode.
                 </p>
               </div>

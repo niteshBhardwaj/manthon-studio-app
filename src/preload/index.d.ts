@@ -123,6 +123,8 @@ interface ManthanAPI {
   getRetentionPolicy: () => Promise<RetentionPolicy>
   setRetentionPolicy: (policy: RetentionPolicy) => Promise<{ success: boolean }>
   applyRetentionPolicy: (policy?: RetentionPolicy) => Promise<RetentionResult>
+  resetFiles: () => Promise<{ success: boolean; restarting: boolean; canceled?: boolean }>
+  resetFactory: () => Promise<{ success: boolean; restarting: boolean; canceled?: boolean }>
 
   saveMedia: (data: string, filename: string, mimeType: string) => Promise<{ path: string }>
   openFile: () => Promise<{
