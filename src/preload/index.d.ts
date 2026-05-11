@@ -104,8 +104,8 @@ interface ManthanAPI {
   isGoogleAuthenticated: () => Promise<GoogleAuthStatus>
   disconnectGoogle: () => Promise<{ success: boolean }>
   saveGoogleDriveConfig: (config: {
-    clientId: string
-    clientSecret: string
+    clientId: string | null
+    clientSecret: string | null
   }) => Promise<{ success: boolean }>
   getGoogleDriveConfig: () => Promise<{ clientId: string | null; clientSecret: string | null }>
   createBackup: (options: CreateBackupOptions) => Promise<CreateBackupResult>
