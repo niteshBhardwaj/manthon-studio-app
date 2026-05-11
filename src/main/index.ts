@@ -17,9 +17,9 @@ import { queueManager } from './queue/queue-manager'
 import { logger } from './logger'
 import { backupManager } from './backup/backup-manager'
 
-// Use a separate data directory for development
 if (is.dev) {
-  app.setName('manthan-studio-dev')
+  app.name = `${app.name}-dev`
+  app.setPath('userData', join(app.getPath('appData'), app.name))
 }
 
 function createWindow(): void {
@@ -65,7 +65,7 @@ protocol.registerSchemesAsPrivileged([
 ])
 
 app.whenReady().then(async () => {
-  electronApp.setAppUserModelId('com.manthan.studio')
+  electronApp.setAppUserModelId(is.dev ? 'com.manthan.studio.dev' : 'com.manthan.studio')
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
