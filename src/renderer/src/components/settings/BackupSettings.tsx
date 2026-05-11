@@ -10,10 +10,19 @@ import {
   RotateCcw,
   Shield,
   Trash2,
-  UploadCloud
+  UploadCloud,
+  Key,
+  Info,
+  ExternalLink
 } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
+} from '../ui/tooltip'
 import { cn } from '../../lib/utils'
 
 interface BackupInfo {
@@ -48,6 +57,8 @@ interface BackupSettingsState {
 interface AuthStatus {
   authenticated: boolean
   email: string | null
+  hasConfig?: boolean
+  clientId?: string | null
 }
 
 type BusyAction = 'connect' | 'disconnect' | 'backup' | 'restore' | 'delete' | 'refresh' | null
@@ -118,6 +129,8 @@ export function BackupSettings(): JSX.Element {
   const [restoreProgress, setRestoreProgress] = useState<BackupProgress | null>(null)
   const [busy, setBusy] = useState<BusyAction>('refresh')
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
+  const [config, setConfig] = useState({ clientId: '', clientSecret: '' })
+  const [isConfigEditing, setIsConfigEditing] = useState(false)
 
   const quotaRatio = useMemo(() => {
     const quota = settings.driveQuota
@@ -129,12 +142,20 @@ export function BackupSettings(): JSX.Element {
     if (!window.manthan) return
     setBusy((current) => current ?? 'refresh')
     try {
-      const [nextAuth, nextSettings] = await Promise.all([
+      const [nextAuth, nextSettings, nextConfig] = await Promise.all([
         window.manthan.isGoogleAuthenticated(),
-        window.manthan.getBackupSettings()
+        window.manthan.getBackupSettings(),
+        window.manthan.getGoogleDriveConfig()
       ])
       setAuth(nextAuth)
       setSettings({ ...DEFAULT_SETTINGS, ...nextSettings })
+      setConfig({
+        clientId: nextConfig.clientId || '',
+        clientSecret: nextConfig.clientSecret ? '••••••••••••••••' : ''
+      })
+      const shouldEdit = !nextAuth.hasConfig || !nextConfig.clientId || !nextConfig.clientSecret
+      setIsConfigEditing(shouldEdit)
+
       if (nextAuth.authenticated) {
         setBackups(await window.manthan.listBackups())
       } else {
@@ -181,6 +202,31 @@ export function BackupSettings(): JSX.Element {
       setStatusMessage('Google Drive connected.')
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : 'Google Drive connection failed.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const handleSaveConfig = async (): Promise<void> => {
+    if (!config.clientId.trim() || !config.clientSecret.trim()) {
+      setStatusMessage('Enter both Client ID and Client Secret.')
+      return
+    }
+
+    setBusy('refresh')
+    try {
+      // Only send the secret if it was changed (not the masked dots)
+      const payload = {
+        clientId: config.clientId,
+        clientSecret: config.clientSecret === '••••••••••••••••' ? null : config.clientSecret
+      }
+      
+      await window.manthan.saveGoogleDriveConfig(payload)
+      setStatusMessage('Google Drive configuration saved.')
+      await loadBackupState()
+      setIsConfigEditing(false)
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : 'Failed to save configuration.')
     } finally {
       setBusy(null)
     }
@@ -273,6 +319,109 @@ export function BackupSettings(): JSX.Element {
   return (
     <div className="space-y-5">
       <section className="rounded-lg border border-border-subtle bg-bg-elevated/30 p-4">
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm font-semibold text-text-primary">
+            <Key className="h-4 w-4 text-text-muted" />
+            API Configuration
+            <TooltipProvider>
+              <Tooltip delayDuration={0}>
+                <TooltipTrigger asChild>
+                  <button type="button" className="text-text-muted hover:text-text-primary transition-colors">
+                    <Info className="h-3.5 w-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="w-80 p-4 space-y-3 leading-relaxed">
+                  <p className="font-semibold text-accent">How to get Credentials:</p>
+                  <ol className="list-decimal list-inside space-y-2 text-[11px] text-text-secondary">
+                    <li>Go to <a href="https://console.cloud.google.com/" target="_blank" rel="noreferrer" className="text-accent hover:underline inline-flex items-center gap-0.5">Google Cloud Console <ExternalLink className="h-3 w-3" /></a></li>
+                    <li>Create a new Project (e.g., "Manthan Studio").</li>
+                    <li>Go to <b>Library</b> and enable <b>Google Drive API</b>.</li>
+                    <li>Configure <b>OAuth Consent Screen</b>:
+                      <ul className="list-disc list-inside ml-3 mt-1 space-y-1 text-text-muted">
+                        <li>User Type: External</li>
+                        <li>Add scope: <code>.../auth/drive.file</code></li>
+                        <li><b>Important:</b> Add your email as a <b>Test User</b>.</li>
+                      </ul>
+                    </li>
+                    <li>Go to <b>Credentials</b> → <b>Create Credentials</b> → <b>OAuth client ID</b>.</li>
+                    <li>Select <b>Desktop app</b>, name it, and click <b>Create</b>.</li>
+                  </ol>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+          {auth.clientId && !isConfigEditing && (
+            <Button variant="ghost" size="sm" onClick={() => setIsConfigEditing(true)}>
+              Edit
+            </Button>
+          )}
+        </div>
+
+        {isConfigEditing ? (
+          <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-medium text-text-secondary">Client ID</label>
+                <Input
+                  value={config.clientId}
+                  onChange={(e) => setConfig((c) => ({ ...c, clientId: e.target.value }))}
+                  placeholder="Enter Google Client ID"
+                  className="h-9 rounded-lg border border-border-subtle bg-bg-input text-xs"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-medium text-text-secondary">Client Secret</label>
+                <Input
+                  type="password"
+                  value={config.clientSecret}
+                  onChange={(e) => setConfig((c) => ({ ...c, clientSecret: e.target.value }))}
+                  placeholder="Enter Google Client Secret"
+                  className="h-9 rounded-lg border border-border-subtle bg-bg-input text-xs"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              {auth.hasConfig && (
+                <Button variant="ghost" size="sm" onClick={() => setIsConfigEditing(false)}>
+                  Cancel
+                </Button>
+              )}
+              <Button size="sm" disabled={busy === 'refresh'} onClick={() => void handleSaveConfig()}>
+                {busy === 'refresh' && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                Save Configuration
+              </Button>
+            </div>
+          </div>
+        ) : auth.clientId ? (
+          <div className="flex items-center justify-between rounded-md bg-bg-secondary/40 p-3">
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-text-primary">Configured Client ID</p>
+              <p className="mt-0.5 truncate text-[11px] text-text-muted">{auth.clientId}</p>
+            </div>
+            <div className="flex h-6 items-center rounded-full bg-success/10 px-2 text-[10px] font-medium text-success">
+              Ready
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center rounded-md border border-dashed border-border-subtle p-8 text-center">
+            <Key className="mb-2 h-5 w-5 text-text-muted/50" />
+            <p className="text-xs font-medium text-text-primary">No Configuration Found</p>
+            <p className="mt-1 text-[11px] text-text-muted">
+              Enter your Google Client ID and Secret to enable backups.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-4"
+              onClick={() => setIsConfigEditing(true)}
+            >
+              Configure Now
+            </Button>
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-lg border border-border-subtle bg-bg-elevated/30 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
             <div
@@ -309,7 +458,11 @@ export function BackupSettings(): JSX.Element {
                 Disconnect
               </Button>
             ) : (
-              <Button size="sm" disabled={busy === 'connect'} onClick={() => void handleConnect()}>
+              <Button
+                size="sm"
+                disabled={busy === 'connect' || !auth.hasConfig}
+                onClick={() => void handleConnect()}
+              >
                 {busy === 'connect' ? (
                   <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                 ) : (
@@ -510,8 +663,8 @@ export function BackupSettings(): JSX.Element {
                   </td>
                 </tr>
               ) : (
-                backups.map((backup) => (
-                  <tr key={backup.id} className="border-t border-border-subtle text-text-secondary">
+                backups.map((backup, index) => (
+                  <tr key={backup.id || `backup-${index}`} className="border-t border-border-subtle text-text-secondary">
                     <td className="max-w-[220px] px-3 py-3">
                       <div className="truncate text-text-primary">{backup.name}</div>
                       {backup.encrypted ? (

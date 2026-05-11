@@ -16,6 +16,8 @@ interface KeyStoreSchema extends Record<string, unknown> {
     refreshToken: string | null
     accountEmail: string | null
     folderId: string | null
+    googleClientId?: string | null
+    googleClientSecret?: string | null
   }
 }
 
@@ -26,7 +28,9 @@ const store = new JsonStore<KeyStoreSchema>('manthan-keys', {
   backupOAuth: {
     refreshToken: null,
     accountEmail: null,
-    folderId: null
+    folderId: null,
+    googleClientId: null,
+    googleClientSecret: null
   }
 })
 
@@ -177,6 +181,7 @@ export const keyStore = {
   }): void {
     const current = store.get('backupOAuth')
     store.set('backupOAuth', {
+      ...current,
       refreshToken: encodeKey(credentials.refreshToken),
       accountEmail: credentials.accountEmail ?? current.accountEmail ?? null,
       folderId: credentials.folderId ?? current.folderId ?? null
@@ -206,8 +211,28 @@ export const keyStore = {
     })
   },
 
-  clearGoogleDriveCredentials(): void {
+  saveGoogleDriveConfig(config: { clientId: string | null; clientSecret: string | null }): void {
+    const current = store.get('backupOAuth')
     store.set('backupOAuth', {
+      ...current,
+      googleClientId: config.clientId ? encodeKey(config.clientId) : current.googleClientId,
+      googleClientSecret: config.clientSecret ? encodeKey(config.clientSecret) : current.googleClientSecret
+    })
+    logger.info('App', 'Google Drive client configuration saved')
+  },
+
+  getGoogleDriveConfig(): { clientId: string | null; clientSecret: string | null } {
+    const backupOAuth = store.get('backupOAuth')
+    return {
+      clientId: backupOAuth.googleClientId ? decodeKey(backupOAuth.googleClientId) : null,
+      clientSecret: backupOAuth.googleClientSecret ? decodeKey(backupOAuth.googleClientSecret) : null
+    }
+  },
+
+  clearGoogleDriveCredentials(): void {
+    const current = store.get('backupOAuth')
+    store.set('backupOAuth', {
+      ...current,
       refreshToken: null,
       accountEmail: null,
       folderId: null

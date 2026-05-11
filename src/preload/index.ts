@@ -57,6 +57,9 @@ const manthanAPI = {
   authenticateGoogle: () => ipcRenderer.invoke('backup:authenticate'),
   isGoogleAuthenticated: () => ipcRenderer.invoke('backup:is-authenticated'),
   disconnectGoogle: () => ipcRenderer.invoke('backup:disconnect'),
+  saveGoogleDriveConfig: (config: { clientId: string; clientSecret: string }) =>
+    ipcRenderer.invoke('backup:save-config', config),
+  getGoogleDriveConfig: () => ipcRenderer.invoke('backup:get-config'),
   createBackup: (options: { encrypt: boolean; password?: string }) =>
     ipcRenderer.invoke('backup:create', options),
   listBackups: () => ipcRenderer.invoke('backup:list'),

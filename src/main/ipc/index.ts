@@ -276,6 +276,15 @@ export function registerIpcHandlers(): void {
     return googleAuth.disconnect()
   })
 
+  logIpcHandler('backup:save-config', async (_event, config: { clientId: string; clientSecret: string }) => {
+    keyStore.saveGoogleDriveConfig(config)
+    return { success: true }
+  })
+
+  logIpcHandler('backup:get-config', async () => {
+    return keyStore.getGoogleDriveConfig()
+  })
+
   logIpcHandler('backup:create', async (_event, options: { encrypt: boolean; password?: string }) => {
     return backupManager.createBackup(options)
   })

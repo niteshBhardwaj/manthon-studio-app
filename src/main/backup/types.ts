@@ -33,6 +33,8 @@ export interface DriveQuota {
 export interface GoogleAuthStatus {
   authenticated: boolean
   email: string | null
+  hasConfig: boolean
+  clientId?: string | null
 }
 
 export interface BackupInfo {

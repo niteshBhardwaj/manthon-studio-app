@@ -9,27 +9,40 @@ import { logger } from '../logger'
 import type { DriveQuota, GoogleAuthStatus } from './types'
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file'
+const EMAIL_SCOPE = 'https://www.googleapis.com/auth/userinfo.email'
+const PROFILE_SCOPE = 'https://www.googleapis.com/auth/userinfo.profile'
 const BACKUP_FOLDER_NAME = 'Manthan Studio Backups'
 const CALLBACK_PATH = '/oauth2callback'
 const AUTH_TIMEOUT_MS = 5 * 60 * 1000
 
-function getOAuthConfig(): { clientId: string; clientSecret: string } {
+function getEffectiveConfig(): { clientId: string | null; clientSecret: string | null } {
+  const stored = keyStore.getGoogleDriveConfig()
   const clientId =
+    stored.clientId ??
     process.env.MANTHAN_GOOGLE_CLIENT_ID ??
     process.env.GOOGLE_DRIVE_CLIENT_ID ??
-    process.env.GOOGLE_CLIENT_ID
+    process.env.GOOGLE_CLIENT_ID ??
+    null
   const clientSecret =
+    stored.clientSecret ??
     process.env.MANTHAN_GOOGLE_CLIENT_SECRET ??
     process.env.GOOGLE_DRIVE_CLIENT_SECRET ??
-    process.env.GOOGLE_CLIENT_SECRET
+    process.env.GOOGLE_CLIENT_SECRET ??
+    null
+
+  return { clientId, clientSecret }
+}
+
+function getOAuthConfig(): { clientId: string; clientSecret: string } {
+  const { clientId, clientSecret } = getEffectiveConfig()
 
   if (!clientId || !clientSecret) {
     throw new Error(
-      'Google Drive backup requires GOOGLE_DRIVE_CLIENT_ID and GOOGLE_DRIVE_CLIENT_SECRET.'
+      'Google Drive backup requires a Client ID and Client Secret. Please configure them in Settings.'
     )
   }
 
-  return { clientId, clientSecret }
+  return { clientId: clientId!, clientSecret: clientSecret! }
 }
 
 function escapeDriveQuery(value: string): string {
@@ -45,7 +58,7 @@ class GoogleAuthManager {
     const authUrl = client.generateAuthUrl({
       access_type: 'offline',
       prompt: 'consent',
-      scope: [DRIVE_SCOPE],
+      scope: [DRIVE_SCOPE, EMAIL_SCOPE, PROFILE_SCOPE],
       state
     })
 
@@ -105,19 +118,29 @@ class GoogleAuthManager {
     return google.drive({ version: 'v3', auth: client })
   }
 
-  async isAuthenticated(): Promise<GoogleAuthStatus> {
+  async isAuthenticated(): Promise<GoogleAuthStatus & { hasConfig: boolean; clientId?: string | null }> {
+    const config = getEffectiveConfig()
+    const hasConfig = !!(config.clientId && config.clientSecret)
     const refreshToken = keyStore.getGoogleDriveRefreshToken()
-    if (!refreshToken) return { authenticated: false, email: null }
+
+    if (!refreshToken) return { authenticated: false, email: null, hasConfig, clientId: config.clientId }
 
     try {
       await this.getAccessToken()
       return {
         authenticated: true,
-        email: keyStore.getGoogleDriveAccountEmail()
+        email: keyStore.getGoogleDriveAccountEmail(),
+        hasConfig,
+        clientId: config.clientId
       }
     } catch (error) {
       logger.warn('Backup', 'Stored Google Drive token could not be refreshed:', error)
-      return { authenticated: false, email: keyStore.getGoogleDriveAccountEmail() }
+      return {
+        authenticated: false,
+        email: keyStore.getGoogleDriveAccountEmail(),
+        hasConfig,
+        clientId: config.clientId
+      }
     }
   }
 
