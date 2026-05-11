@@ -5,9 +5,9 @@
 
 import { app, shell, BrowserWindow, protocol, net } from 'electron'
 import { join } from 'path'
+import icon from '../../resources/icon.png?asset'
 import { pathToFileURL } from 'url'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import icon from '../../resources/icon.png?asset'
 import { registerIpcHandlers, initializeStoredProviders } from './ipc'
 import { databaseManager } from './store/db'
 import { assetManager } from './store/asset-manager'
@@ -16,6 +16,11 @@ import { storageManager } from './store/storage-manager'
 import { queueManager } from './queue/queue-manager'
 import { logger } from './logger'
 import { backupManager } from './backup/backup-manager'
+
+// Use a separate data directory for development
+if (is.dev) {
+  app.setName('manthan-studio-dev')
+}
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
