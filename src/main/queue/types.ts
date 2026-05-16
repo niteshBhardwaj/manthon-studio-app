@@ -10,7 +10,8 @@ export type QueueJobType = Modality
 export type QueueJobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
 
 export interface QueueJobInputAsset {
-  data: string
+  data?: string
+  filePath?: string
   mimeType: string
   metadata?: Record<string, unknown>
   referenceType?: string

@@ -15,6 +15,7 @@ import {
 } from './base'
 import { logger } from '../logger'
 import { appStore } from '../store/app-store'
+import { sanitizePayloadForLog } from '../utils/log-sanitizer'
 
 export class GoogleLyriaProvider implements MediaProvider {
   id = 'google-lyria'
@@ -97,7 +98,9 @@ export class GoogleLyriaProvider implements MediaProvider {
     })
 
     try {
-      let contents: string | Array<{ text: string } | { inlineData: { data: string; mimeType: string } }>
+      let contents:
+        | string
+        | Array<{ text: string } | { inlineData: { data: string; mimeType: string } }>
 
       let finalPrompt = params.prompt
 
@@ -137,8 +140,9 @@ export class GoogleLyriaProvider implements MediaProvider {
 
       // DRY RUN: Log and intercept if enabled in preferences
       if (appStore.getPreferences().dryRun) {
-        const payloadString = JSON.stringify(request, null, 2)
-        logger.info('DRY-RUN', 'Lyria API Payload intercepted', { payload: request })
+        const sanitizedPayload = sanitizePayloadForLog(request)
+        const payloadString = JSON.stringify(sanitizedPayload, null, 2)
+        logger.info('DRY-RUN', 'Lyria API Payload intercepted', { payload: sanitizedPayload })
         appStore.saveApiLog({
           jobId: params.jobId,
           provider: this.id,
@@ -185,7 +189,9 @@ export class GoogleLyriaProvider implements MediaProvider {
         ...(coverArt ? { metadata: { coverArt } } : {})
       }
     } catch (error: unknown) {
-      logger.error('Provider', 'generateAudio() failed', { error: error instanceof Error ? error.message : 'Unknown' })
+      logger.error('Provider', 'generateAudio() failed', {
+        error: error instanceof Error ? error.message : 'Unknown'
+      })
       throw new Error(
         `Audio generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
       )

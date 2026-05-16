@@ -38,10 +38,18 @@ export function queueJobToGenerationJob(job: QueueJob): GenerationJob {
       batchCount: job.config.batchCount,
       capabilityValues: job.config.capabilityValues as Record<string, string | number | boolean>
     },
-    image: startFrame ? { data: startFrame.data, mimeType: startFrame.mimeType, metadata: startFrame.metadata } : undefined,
-    lastFrame: endFrame ? { data: endFrame.data, mimeType: endFrame.mimeType, metadata: endFrame.metadata } : undefined,
+    image: startFrame
+      ? {
+          data: startFrame.data ?? '',
+          mimeType: startFrame.mimeType,
+          metadata: startFrame.metadata
+        }
+      : undefined,
+    lastFrame: endFrame
+      ? { data: endFrame.data ?? '', mimeType: endFrame.mimeType, metadata: endFrame.metadata }
+      : undefined,
     referenceImages: referenceImages.map((asset) => ({
-      data: asset.data,
+      data: asset.data ?? '',
       mimeType: asset.mimeType,
       metadata: asset.metadata
     })),
@@ -99,7 +107,8 @@ export async function enqueueGeneration({
       groupId,
       type: payload.contentType,
       prompt: payload.params.prompt,
-      negativePrompt: 'negativePrompt' in payload.params ? payload.params.negativePrompt : undefined,
+      negativePrompt:
+        'negativePrompt' in payload.params ? payload.params.negativePrompt : undefined,
       provider: payload.providerId,
       model: selectedModel,
       config: {

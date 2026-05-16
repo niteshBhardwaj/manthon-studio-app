@@ -188,5 +188,25 @@ export const MIGRATIONS: Migration[] = [
       );
       CREATE INDEX IF NOT EXISTS idx_api_logs_created_at ON api_logs(created_at DESC);
     `
+  },
+  {
+    version: 5,
+    description: 'Remove inline media bytes from queue results and oversized API logs',
+    sql: `
+      UPDATE job_queue
+      SET result = json_remove(result, '$.data')
+      WHERE status IN ('completed', 'failed', 'cancelled')
+        AND result IS NOT NULL
+        AND json_valid(result)
+        AND json_extract(result, '$.assetId') IS NOT NULL;
+
+      UPDATE job_queue
+      SET result = json_remove(result, '$.metadata.images', '$.metadata.coverArt.data')
+      WHERE result IS NOT NULL
+        AND json_valid(result)
+        AND json_type(result, '$.metadata') = 'object';
+
+      DELETE FROM api_logs WHERE length(payload) > 1048576;
+    `
   }
 ]

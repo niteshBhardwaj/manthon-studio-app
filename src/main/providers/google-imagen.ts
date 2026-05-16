@@ -15,6 +15,7 @@ import {
 } from './base'
 import { logger } from '../logger'
 import { appStore } from '../store/app-store'
+import { sanitizePayloadForLog } from '../utils/log-sanitizer'
 
 export class GoogleImagenProvider implements MediaProvider {
   id = 'google-imagen'
@@ -157,8 +158,9 @@ export class GoogleImagenProvider implements MediaProvider {
       // DRY RUN: Log and intercept if enabled in preferences
       if (appStore.getPreferences().dryRun) {
         const requestPayload = { model, contents, config }
-        const payloadString = JSON.stringify(requestPayload, null, 2)
-        logger.info('DRY-RUN', 'Imagen API Payload intercepted', { payload: requestPayload })
+        const sanitizedPayload = sanitizePayloadForLog(requestPayload)
+        const payloadString = JSON.stringify(sanitizedPayload, null, 2)
+        logger.info('DRY-RUN', 'Imagen API Payload intercepted', { payload: sanitizedPayload })
         appStore.saveApiLog({
           jobId: params.jobId,
           provider: this.id,

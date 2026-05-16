@@ -16,6 +16,28 @@ interface ApiLog {
   created_at: number
 }
 
+function renderPayloadSafe(raw: string): string {
+  try {
+    const parsed = JSON.parse(raw)
+    const sanitized = JSON.parse(
+      JSON.stringify(parsed, (_key, value) => {
+        if (
+          typeof value === 'string' &&
+          value.length > 1024 &&
+          /^[A-Za-z0-9+/=]+$/.test(value.slice(0, 64))
+        ) {
+          const sizeKB = Math.round((value.length * 0.75) / 1024)
+          return `[BASE64 DATA - ${sizeKB} KB]`
+        }
+        return value
+      })
+    )
+    return JSON.stringify(sanitized, null, 2)
+  } catch {
+    return raw.length > 10_000 ? `${raw.substring(0, 10_000)}\n... [TRUNCATED]` : raw
+  }
+}
+
 export function ApiLogsPage(): JSX.Element {
   const [logs, setLogs] = useState<ApiLog[]>([])
   const [search, setSearch] = useState('')
@@ -24,11 +46,11 @@ export function ApiLogsPage(): JSX.Element {
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
   const formatTime = (ts: number) => {
-    return new Date(ts).toLocaleTimeString('en-US', { 
-      hour12: false, 
-      hour: '2-digit', 
-      minute: '2-digit', 
-      second: '2-digit' 
+    return new Date(ts).toLocaleTimeString('en-US', {
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
     })
   }
 
@@ -73,13 +95,14 @@ export function ApiLogsPage(): JSX.Element {
     setTimeout(() => setCopiedId(null), 2000)
   }
 
-  const filteredLogs = logs.filter(log => 
-    log.provider.toLowerCase().includes(search.toLowerCase()) ||
-    log.method.toLowerCase().includes(search.toLowerCase()) ||
-    log.payload.toLowerCase().includes(search.toLowerCase())
+  const filteredLogs = logs.filter(
+    (log) =>
+      log.provider.toLowerCase().includes(search.toLowerCase()) ||
+      log.method.toLowerCase().includes(search.toLowerCase()) ||
+      log.payload.toLowerCase().includes(search.toLowerCase())
   )
 
-  const selectedLog = logs.find(l => l.id === selectedLogId)
+  const selectedLog = logs.find((l) => l.id === selectedLogId)
 
   return (
     <div className="h-full flex flex-col bg-bg-primary overflow-hidden">
@@ -90,15 +113,19 @@ export function ApiLogsPage(): JSX.Element {
             <Terminal className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold text-text-primary tracking-tight">API Dry-Run Logs</h1>
-            <p className="text-sm text-text-muted">Inspect raw payloads intercepted during development</p>
+            <h1 className="text-xl font-semibold text-text-primary tracking-tight">
+              API Dry-Run Logs
+            </h1>
+            <p className="text-sm text-text-muted">
+              Inspect raw payloads intercepted during development
+            </p>
           </div>
         </div>
 
         <div className="flex items-center gap-4">
           <div className="relative group">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted group-focus-within:text-accent transition-colors" />
-            <input 
+            <input
               type="text"
               placeholder="Search logs..."
               value={search}
@@ -106,7 +133,7 @@ export function ApiLogsPage(): JSX.Element {
               className="pl-10 pr-4 py-2 bg-bg-tertiary/50 border border-border-subtle rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent w-64 transition-all"
             />
           </div>
-          <button 
+          <button
             onClick={handleClear}
             disabled={logs.length === 0}
             className="flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl text-sm font-medium transition-colors border border-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -120,10 +147,12 @@ export function ApiLogsPage(): JSX.Element {
       {/* Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* List View */}
-        <div className={cn(
-          "h-full border-r border-border-subtle bg-bg-primary/50 transition-all duration-300",
-          selectedLogId ? "w-1/3" : "w-full"
-        )}>
+        <div
+          className={cn(
+            'h-full border-r border-border-subtle bg-bg-primary/50 transition-all duration-300',
+            selectedLogId ? 'w-1/3' : 'w-full'
+          )}
+        >
           {loading ? (
             <div className="flex items-center justify-center h-full">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent" />
@@ -135,15 +164,17 @@ export function ApiLogsPage(): JSX.Element {
             </div>
           ) : (
             <div className="overflow-y-auto h-full scrollbar-thin scrollbar-thumb-white/10">
-              {filteredLogs.map(log => {
+              {filteredLogs.map((log) => {
                 const isActive = selectedLogId === log.id
                 return (
                   <button
                     key={log.id}
                     onClick={() => setSelectedLogId(log.id)}
                     className={cn(
-                      "w-full text-left px-6 py-4 border-b border-border-subtle transition-all group",
-                      isActive ? "bg-accent/5 border-l-4 border-l-accent" : "hover:bg-bg-hover/30 border-l-4 border-l-transparent"
+                      'w-full text-left px-6 py-4 border-b border-border-subtle transition-all group',
+                      isActive
+                        ? 'bg-accent/5 border-l-4 border-l-accent'
+                        : 'hover:bg-bg-hover/30 border-l-4 border-l-transparent'
                     )}
                   >
                     <div className="flex items-center justify-between mb-1">
@@ -168,16 +199,22 @@ export function ApiLogsPage(): JSX.Element {
         </div>
 
         {/* Detail View */}
-        <div className={cn(
-          "h-full flex-1 bg-bg-secondary/10 flex flex-col transition-all",
-          selectedLogId ? "translate-x-0 opacity-100" : "translate-x-full opacity-0 absolute pointer-events-none"
-        )}>
+        <div
+          className={cn(
+            'h-full flex-1 bg-bg-secondary/10 flex flex-col transition-all',
+            selectedLogId
+              ? 'translate-x-0 opacity-100'
+              : 'translate-x-full opacity-0 absolute pointer-events-none'
+          )}
+        >
           {selectedLog && (
             <>
               <div className="px-8 py-6 border-b border-border-subtle bg-bg-primary/50 flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-3 mb-1">
-                    <h2 className="text-lg font-semibold text-text-primary">{selectedLog.method}</h2>
+                    <h2 className="text-lg font-semibold text-text-primary">
+                      {selectedLog.method}
+                    </h2>
                     <span className="px-2 py-0.5 bg-accent/10 text-accent text-[11px] font-bold rounded-full border border-accent/20">
                       {selectedLog.provider}
                     </span>
@@ -198,19 +235,23 @@ export function ApiLogsPage(): JSX.Element {
                     )}
                   </div>
                 </div>
-                
+
                 <div className="flex items-center gap-2">
-                  <button 
+                  <button
                     onClick={() => handleCopy(selectedLog.payload, selectedLog.id)}
                     className="flex items-center gap-2 px-3 py-1.5 bg-bg-tertiary hover:bg-bg-hover text-text-secondary rounded-lg text-xs font-medium transition-all border border-border-subtle"
                   >
                     {copiedId === selectedLog.id ? (
-                      <><Check className="w-3.5 h-3.5 text-emerald-400" /> Copied</>
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-400" /> Copied
+                      </>
                     ) : (
-                      <><Copy className="w-3.5 h-3.5" /> Copy JSON</>
+                      <>
+                        <Copy className="w-3.5 h-3.5" /> Copy JSON
+                      </>
                     )}
                   </button>
-                  <button 
+                  <button
                     onClick={() => setSelectedLogId(null)}
                     className="p-1.5 hover:bg-bg-hover rounded-lg text-text-muted transition-colors"
                   >
@@ -227,7 +268,7 @@ export function ApiLogsPage(): JSX.Element {
                     </div>
                   </div>
                   <pre className="p-6 overflow-x-auto text-text-secondary scrollbar-thin scrollbar-thumb-white/10 selection:bg-accent/30">
-                    {JSON.stringify(JSON.parse(selectedLog.payload), null, 2)}
+                    {renderPayloadSafe(selectedLog.payload)}
                   </pre>
                 </div>
               </div>

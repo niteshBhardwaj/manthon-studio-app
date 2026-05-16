@@ -8,6 +8,8 @@ import { jobProcessor } from './job-processor'
 import { notifyBatchComplete, notifyJobComplete, notifyJobFailed } from '../notifications'
 import { logger } from '../logger'
 import { backupManager } from '../backup/backup-manager'
+import { cleanupQueueInputFiles, externalizeQueueInputAssets } from './input-asset-storage'
+import { sanitizePayloadForLog } from '../utils/log-sanitizer'
 import type {
   EnqueueJobInput,
   QueueConfig,
@@ -111,6 +113,7 @@ class QueueManager {
     const id = randomUUID()
     const priority = input.priority ?? now
     const maxRetries = input.maxRetries ?? this.config.maxRetries
+    const storedInput = externalizeQueueInputAssets(input, id)
 
     databaseManager.run(
       `INSERT INTO job_queue (
@@ -119,16 +122,16 @@ class QueueManager {
       ) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
       [
         id,
-        input.groupId ?? null,
-        input.projectId ?? 'default',
-        input.type,
+        storedInput.groupId ?? null,
+        storedInput.projectId ?? 'default',
+        storedInput.type,
         priority,
-        input.prompt,
-        input.negativePrompt ?? '',
-        input.provider,
-        input.model,
-        JSON.stringify(input.config),
-        JSON.stringify(input.inputAssets ?? []),
+        storedInput.prompt,
+        storedInput.negativePrompt ?? '',
+        storedInput.provider,
+        storedInput.model,
+        JSON.stringify(storedInput.config),
+        JSON.stringify(storedInput.inputAssets ?? []),
         maxRetries,
         now
       ]
@@ -140,7 +143,7 @@ class QueueManager {
     }
 
     logger.info('Queue', `Job enqueued: ${job.type} | ${job.model} | ID: ${job.id}`)
-    
+
     void this.emitQueueUpdate()
     void this.processNext()
 
@@ -178,6 +181,7 @@ class QueueManager {
   }
 
   async cancelJob(id: string): Promise<{ success: boolean }> {
+    const job = this.getJob(id)
     const running = this.runningJobs.get(id)
     if (running) {
       running.controller.abort()
@@ -189,6 +193,9 @@ class QueueManager {
     }
 
     this.progressByJob.delete(id)
+    if (job) {
+      cleanupQueueInputFiles(job.input_assets, job.config.providerParams)
+    }
     databaseManager.run(
       `UPDATE job_queue
        SET status = 'cancelled', error = 'Cancelled by user', completed_at = ?
@@ -229,6 +236,13 @@ class QueueManager {
   }
 
   clearCompleted(): { success: boolean } {
+    const completed = databaseManager.query<RawQueueJobRow>(
+      `SELECT * FROM job_queue WHERE status = 'completed'`
+    )
+    for (const row of completed) {
+      const job = this.hydrate(row)
+      cleanupQueueInputFiles(job.input_assets, job.config.providerParams)
+    }
     databaseManager.run(`DELETE FROM job_queue WHERE status = 'completed'`)
     void this.emitQueueUpdate()
     return { success: true }
@@ -239,6 +253,10 @@ class QueueManager {
       throw new Error('Cannot delete a running job')
     }
 
+    const job = this.getJob(id)
+    if (job) {
+      cleanupQueueInputFiles(job.input_assets, job.config.providerParams)
+    }
     databaseManager.run('DELETE FROM job_queue WHERE id = ?', [id])
     this.progressByJob.delete(id)
     void this.emitQueueUpdate()
@@ -304,7 +322,7 @@ class QueueManager {
     )
 
     logger.info('Queue', `Job started: ${job.type} | ${job.model} | ID: ${job.id}`)
-    
+
     void this.emitQueueUpdate()
     this.emitToWindows('queue:job-progress', {
       jobId: job.id,
@@ -360,10 +378,12 @@ class QueueManager {
     const asset = await this.persistResultAsset(job, result)
     const storedResult: QueueJobResult = {
       ...result,
+      data: undefined,
       assetId: asset?.id ?? result.assetId,
       assetPath: asset?.storage_path ?? result.assetPath,
       thumbnailPath: asset?.thumbnail_path ?? result.thumbnailPath,
       filename: asset?.filename ?? result.filename,
+      metadata: sanitizePayloadForLog(result.metadata) as Record<string, unknown> | undefined,
       uri: asset ? undefined : result.uri
     }
 
@@ -393,7 +413,7 @@ class QueueManager {
       completedAt,
       result: {
         type: storedResult.type,
-        data: storedResult.data ?? '',
+        data: '',
         mimeType: storedResult.mimeType ?? 'application/octet-stream',
         uri: asset ? undefined : storedResult.uri,
         duration: storedResult.duration,
@@ -418,6 +438,7 @@ class QueueManager {
       })
     }
 
+    cleanupQueueInputFiles(job.input_assets, job.config.providerParams)
     await this.emitQueueUpdate()
     this.notifyIfBatchFinished()
     await this.processNext()
@@ -431,7 +452,8 @@ class QueueManager {
     this.progressByJob.delete(id)
 
     // Skip retries if this is a developer Dry-Run interception
-    const isDryRun = error.toLowerCase().includes('dry run') || appStore.getPreferences().dryRun === true
+    const isDryRun =
+      error.toLowerCase().includes('dry run') || appStore.getPreferences().dryRun === true
 
     if (!isDryRun && job.retry_count < job.max_retries) {
       databaseManager.run(

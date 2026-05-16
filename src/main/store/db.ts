@@ -100,10 +100,9 @@ class DatabaseManager {
       )
     `)
 
-    const applied = db
-      .prepare('SELECT version FROM _migrations')
-      .all() as { version: number }[]
+    const applied = db.prepare('SELECT version FROM _migrations').all() as { version: number }[]
     const appliedSet = new Set(applied.map((r) => r.version))
+    let shouldVacuum = false
 
     for (const migration of MIGRATIONS) {
       if (!appliedSet.has(migration.version)) {
@@ -116,11 +115,27 @@ class DatabaseManager {
 
         try {
           runMigration()
-          logger.info('Migration', `Applied migration v${migration.version}: ${migration.description}`)
+          logger.info(
+            'Migration',
+            `Applied migration v${migration.version}: ${migration.description}`
+          )
+          if (migration.version === 5) {
+            shouldVacuum = true
+          }
         } catch (e) {
           logger.error('Migration', `Failed to apply migration v${migration.version}:`, e)
           throw e
         }
+      }
+    }
+
+    if (shouldVacuum) {
+      try {
+        db.pragma('wal_checkpoint(TRUNCATE)')
+        db.exec('VACUUM')
+        logger.info('Migration', 'Compacted database after media cleanup migration')
+      } catch (error) {
+        logger.warn('Migration', 'Database compaction after media cleanup was skipped:', error)
       }
     }
   }
