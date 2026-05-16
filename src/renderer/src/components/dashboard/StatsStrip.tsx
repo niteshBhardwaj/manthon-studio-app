@@ -1,6 +1,7 @@
 import { type JSX } from 'react'
-import { HardDrive, Sparkles } from 'lucide-react'
+import { HardDrive, Sparkles, Search, Filter, SlidersHorizontal } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { cn } from '../../lib/utils'
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
@@ -23,18 +24,24 @@ export function StatsStrip({
   stats,
   latestGeneratedAt,
   filteredCount,
-  totalCount
+  totalCount,
+  onToggleFilters,
+  filtersOpen,
+  hasActiveFilters
 }: {
   stats: { video: number; image: number; audio: number; totalSize: number }
   latestGeneratedAt?: number | null
   filteredCount: number
   totalCount: number
+  onToggleFilters?: () => void
+  filtersOpen?: boolean
+  hasActiveFilters?: boolean
 }): JSX.Element {
   return (
     <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-muted"
+      className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-muted px-1"
     >
       <div className="inline-flex items-center gap-1.5 text-text-secondary">
         <Sparkles className="h-3 w-3 text-accent" />
@@ -48,9 +55,28 @@ export function StatsStrip({
         <span>{formatBytes(stats.totalSize)}</span>
       </div>
 
-      <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1">
+      <div className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1">
         {filteredCount !== totalCount ? <span>Showing {filteredCount} of {totalCount}</span> : null}
         <span>{formatRelative(latestGeneratedAt)}</span>
+        
+        {onToggleFilters && (
+          <button
+            type="button"
+            onClick={onToggleFilters}
+            className={cn(
+              "ml-2 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors",
+              filtersOpen || hasActiveFilters
+                ? "bg-accent/10 text-accent hover:bg-accent/20"
+                : "bg-white/5 text-text-secondary hover:bg-white/10 hover:text-text-primary"
+            )}
+          >
+            <SlidersHorizontal className="h-3 w-3" />
+            <span>Search & Filter</span>
+            {hasActiveFilters && (
+              <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+            )}
+          </button>
+        )}
       </div>
     </motion.div>
   )

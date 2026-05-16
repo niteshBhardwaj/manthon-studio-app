@@ -90,6 +90,7 @@ interface GenerationState {
   setEndFrame: (frame: BinaryInput | null) => void
   setVideoInput: (video: BinaryInput | null) => void
   addReferenceImage: (img: BinaryInput) => void
+  addImageToPrompt: (img: BinaryInput) => string | null
   removeReferenceImage: (index: number) => void
   clearReferenceImages: () => void
   clearPromptMedia: () => void
@@ -160,7 +161,36 @@ export const useGenerationStore = create<GenerationState>((set) => ({
         [key]: value
       }
     })),
-  setActiveMode: (activeMode) => set({ activeMode }),
+  setActiveMode: (activeMode) =>
+    set((state) => {
+      if (state.activeMode === activeMode) return { activeMode }
+
+      if (state.activeMode === 'frames' && activeMode === 'ingredients') {
+        const syncedImages = [
+          state.startFrame,
+          state.endFrame,
+          ...state.referenceImages
+        ].filter((image): image is BinaryInput => Boolean(image))
+
+        return {
+          activeMode,
+          startFrame: null,
+          endFrame: null,
+          referenceImages: syncedImages.slice(0, 3)
+        }
+      }
+
+      if (state.activeMode === 'ingredients' && activeMode === 'frames') {
+        return {
+          activeMode,
+          startFrame: state.referenceImages[0] ?? null,
+          endFrame: state.referenceImages[1] ?? null,
+          referenceImages: []
+        }
+      }
+
+      return { activeMode }
+    }),
   setBatchCount: (batchCount) =>
     set((state) => ({
       batchCount,
@@ -208,6 +238,45 @@ export const useGenerationStore = create<GenerationState>((set) => ({
     set((s) => ({
       referenceImages: [...s.referenceImages, img]
     })),
+  addImageToPrompt: (img) => {
+    let slotName: string | null = null
+
+    set((state) => {
+      if (state.contentType === 'video' && state.activeMode === 'frames') {
+        if (!state.startFrame) {
+          slotName = 'Start Frame'
+          return { startFrame: img }
+        }
+        if (!state.endFrame) {
+          slotName = 'End Frame'
+          return { endFrame: img }
+        }
+        return {}
+      }
+
+      if (state.activeMode === 'ingredients') {
+        if (state.referenceImages.length >= 3) return {}
+        slotName = 'Ingredient'
+        return { referenceImages: [...state.referenceImages, img] }
+      }
+
+      if (state.contentType === 'image') {
+        const maxImages = getModelById(state.selectedModel)?.maxImages ?? 1
+        if (state.referenceImages.length >= maxImages) return {}
+        slotName = 'Reference Image'
+        return { referenceImages: [...state.referenceImages, img] }
+      }
+
+      if (!state.startFrame) {
+        slotName = 'Start Frame'
+        return { startFrame: img }
+      }
+
+      return {}
+    })
+
+    return slotName
+  },
   removeReferenceImage: (index) =>
     set((s) => ({
       referenceImages: s.referenceImages.filter((_, i) => i !== index)

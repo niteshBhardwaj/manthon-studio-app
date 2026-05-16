@@ -1,5 +1,5 @@
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react'
-import { Play, Volume2, VolumeX } from 'lucide-react'
+import { AlertTriangle, Play, RotateCcw, Volume2, VolumeX } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { VideoPlayerControls } from './VideoPlayerControls'
 import { extractFirstFrame } from '../../lib/video-utils'
@@ -49,9 +49,12 @@ export function VideoPlayer({
   const [previewPosition, setPreviewPosition] = useState(0)
   const [internalHovered, setInternalHovered] = useState(false)
   const [resolvedSrc, setResolvedSrc] = useState(src)
+  const [playbackError, setPlaybackError] = useState<string | null>(null)
+  const [showLoadingOverlay, setShowLoadingOverlay] = useState(false)
 
   const isHovered = externalHovered ?? internalHovered
   const controlsTimer = useRef<number | null>(null)
+  const bufferingTimer = useRef<number | null>(null)
   const { addToast } = useAppStore()
   const { activeProjectId } = useProjectStore()
 
@@ -153,17 +156,55 @@ export function VideoPlayer({
       if (controlsTimer.current) {
         window.clearTimeout(controlsTimer.current)
       }
+      if (bufferingTimer.current) {
+        window.clearTimeout(bufferingTimer.current)
+      }
     },
     []
   )
+
+  useEffect(() => {
+    const video = videoRef.current
+    setPlaybackError(null)
+    setShowLoadingOverlay(false)
+    setCurrentTime(0)
+    setDuration(0)
+
+    if (bufferingTimer.current) {
+      window.clearTimeout(bufferingTimer.current)
+      bufferingTimer.current = null
+    }
+
+    if (video) {
+      video.pause()
+      video.load()
+      setIsPlaying(false)
+    }
+  }, [resolvedSrc])
+
+  const clearBufferingTimer = useCallback(() => {
+    if (bufferingTimer.current) {
+      window.clearTimeout(bufferingTimer.current)
+      bufferingTimer.current = null
+    }
+    setShowLoadingOverlay(false)
+  }, [])
 
   const handlePlayPause = useCallback(() => {
     const video = videoRef.current
     if (!video) return
 
     if (video.paused) {
-      void video.play().catch(() => undefined)
-      setIsPlaying(true)
+      void video
+        .play()
+        .then(() => {
+          setPlaybackError(null)
+          setIsPlaying(true)
+        })
+        .catch((error) => {
+          setIsPlaying(false)
+          setPlaybackError(error instanceof Error ? error.message : 'Video could not start')
+        })
     } else {
       video.pause()
       setIsPlaying(false)
@@ -183,7 +224,39 @@ export function VideoPlayer({
     const video = videoRef.current
     if (!video) return
     setDuration(video.duration || 0)
+    setPlaybackError(null)
+    clearBufferingTimer()
+  }, [clearBufferingTimer])
+
+  const handleVideoWaiting = useCallback(() => {
+    if (bufferingTimer.current) window.clearTimeout(bufferingTimer.current)
+    bufferingTimer.current = window.setTimeout(() => {
+      setShowLoadingOverlay(true)
+    }, 10000)
   }, [])
+
+  const handleVideoError = useCallback(() => {
+    clearBufferingTimer()
+    setIsPlaying(false)
+    setPlaybackError('Video failed to load')
+  }, [clearBufferingTimer])
+
+  const handleVideoEnded = useCallback(() => {
+    if (!loop) setIsPlaying(false)
+  }, [loop])
+
+  const handleRetry = useCallback(() => {
+    const video = videoRef.current
+    if (!video) return
+    setPlaybackError(null)
+    setShowLoadingOverlay(false)
+    video.load()
+    if (autoPlay || isPlaying) {
+      void video.play().catch((error) => {
+        setPlaybackError(error instanceof Error ? error.message : 'Video could not start')
+      })
+    }
+  }, [autoPlay, isPlaying])
 
   const handleSeek = useCallback((time: number) => {
     const video = videoRef.current
@@ -344,6 +417,12 @@ export function VideoPlayer({
           className="h-full w-full object-cover"
           onLoadedMetadata={handleLoadedMetadata}
           onTimeUpdate={handleTimeUpdate}
+          onCanPlay={clearBufferingTimer}
+          onPlaying={clearBufferingTimer}
+          onStalled={handleVideoWaiting}
+          onWaiting={handleVideoWaiting}
+          onError={handleVideoError}
+          onEnded={handleVideoEnded}
           onClick={(event) => {
             event.preventDefault()
           }}
@@ -402,7 +481,7 @@ export function VideoPlayer({
         className
       )}
     >
-      <video
+        <video
         key={resolvedSrc}
         ref={videoRef}
         src={resolvedSrc}
@@ -412,12 +491,45 @@ export function VideoPlayer({
         className="h-full w-full object-contain"
         onLoadedMetadata={handleLoadedMetadata}
         onTimeUpdate={handleTimeUpdate}
+        onCanPlay={clearBufferingTimer}
+        onPlaying={clearBufferingTimer}
+        onStalled={handleVideoWaiting}
+        onWaiting={handleVideoWaiting}
+        onError={handleVideoError}
+        onEnded={handleVideoEnded}
         onPlay={() => {
           setIsPlaying(true)
+          setPlaybackError(null)
+          clearBufferingTimer()
           resetControlsTimer()
         }}
         onPause={() => setIsPlaying(false)}
       />
+
+      {showLoadingOverlay && !playbackError ? (
+        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-black/40">
+          <div className="rounded-full border border-white/10 bg-black/70 px-3 py-1.5 text-xs font-medium text-white/80">
+            Video loading...
+          </div>
+        </div>
+      ) : null}
+
+      {playbackError ? (
+        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-black/75 p-6 text-center">
+          <div className="flex h-11 w-11 items-center justify-center rounded-full border border-red-300/25 bg-red-400/10 text-red-200">
+            <AlertTriangle className="h-5 w-5" />
+          </div>
+          <p className="max-w-sm text-sm text-white/80">{playbackError}</p>
+          <button
+            type="button"
+            onClick={handleRetry}
+            className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-black transition-colors hover:bg-white/90"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            Retry
+          </button>
+        </div>
+      ) : null}
 
       <button
         type="button"

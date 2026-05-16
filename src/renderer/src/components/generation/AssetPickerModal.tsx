@@ -1,4 +1,4 @@
-import { type JSX, useEffect, useState } from 'react'
+import { type JSX, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   Search,
@@ -28,18 +28,24 @@ import { useProjectStore } from '../../stores/project-store'
 import { cn } from '../../lib/utils'
 import type { AssetInfo } from '../../../../preload/index.d'
 
+type AssetType = AssetInfo['type']
+
 interface AssetPickerModalProps {
   isOpen: boolean
   onClose: () => void
   onSelect: (assets: AssetInfo[]) => void
   currentContentType: string
+  maxSelection?: number
+  acceptedTypes?: AssetType[]
 }
 
 export function AssetPickerModal({
   isOpen,
   onClose,
   onSelect,
-  currentContentType
+  currentContentType,
+  maxSelection,
+  acceptedTypes = ['image']
 }: AssetPickerModalProps): JSX.Element {
   const { projects } = useProjectStore()
   const {
@@ -56,12 +62,42 @@ export function AssetPickerModal({
     setSearchQuery,
     setSortBy,
     toggleSelect,
+    selectAssets,
+    clearSelection,
     setPreview,
-    getSelectedAssets,
     addAsset
   } = useAssetPicker()
 
   const [searchInput, setSearchInput] = useState(searchQuery)
+  const acceptedTypeSet = useMemo(() => new Set(acceptedTypes), [acceptedTypes])
+  const visibleAssets = useMemo(
+    () => assets.filter((asset) => acceptedTypeSet.has(asset.type)),
+    [acceptedTypeSet, assets]
+  )
+  const visibleSelectedAssets = useMemo(
+    () => visibleAssets.filter((asset) => selectedIds.has(asset.id)),
+    [selectedIds, visibleAssets]
+  )
+  const visibleTypeFilters = useMemo(
+    () =>
+      ['all', 'image', 'audio', 'video'].filter(
+        (type) => type === 'all' || acceptedTypeSet.has(type as AssetType)
+      ),
+    [acceptedTypeSet]
+  )
+
+  useEffect(() => {
+    if (typeFilter !== 'all' && !acceptedTypeSet.has(typeFilter as AssetType)) {
+      setTypeFilter('all')
+    }
+  }, [acceptedTypeSet, setTypeFilter, typeFilter])
+
+  useEffect(() => {
+    if (previewAsset && !acceptedTypeSet.has(previewAsset.type)) {
+      setPreview(null)
+    }
+  }, [acceptedTypeSet, previewAsset, setPreview])
+
   useEffect(() => {
     const handler = setTimeout(() => {
       setSearchQuery(searchInput)
@@ -71,6 +107,10 @@ export function AssetPickerModal({
 
   useEffect(() => {
     if (isOpen) {
+      clearSelection()
+    }
+
+    if (isOpen) {
       document.body.style.overflow = 'hidden'
     } else {
       document.body.style.overflow = ''
@@ -78,7 +118,7 @@ export function AssetPickerModal({
     return () => {
       document.body.style.overflow = ''
     }
-  }, [currentContentType, isOpen])
+  }, [clearSelection, currentContentType, isOpen])
 
   const { setIsOpen: setMorphingOpen } = useMorphingDialog()
 
@@ -88,35 +128,36 @@ export function AssetPickerModal({
     // When onClose is called, the parent sets isAssetPickerOpen to false, which propagates down via MorphingDialog's controlled state.
   }, [isOpen])
 
-  const handleClose = () => {
+  const handleClose = (): void => {
     setMorphingOpen(false)
     onClose()
   }
 
-  const handleUpload = async () => {
+  const handleUpload = async (): Promise<void> => {
     if (!window.manthan) return
-    const file = await window.manthan.openFile()
-    if (!file) return
-
     try {
-      const savedAsset = await window.manthan.saveAsset({
-        base64Data: file.data,
-        mimeType: file.mimeType,
-        source: 'uploaded',
-        projectId: projectFilter === 'all' ? undefined : projectFilter
-      })
-      addAsset(savedAsset)
+      const importedAssets = await window.manthan.importAssets(
+        projectFilter === 'all' ? undefined : projectFilter
+      )
+      if (importedAssets.length === 0) return
+      const acceptedImportedAssets = importedAssets.filter((asset) => acceptedTypeSet.has(asset.type))
+      acceptedImportedAssets.forEach(addAsset)
+      selectAssets(
+        acceptedImportedAssets.map((asset) => asset.id),
+        maxSelection
+      )
+      setPreview(acceptedImportedAssets[0] ?? null)
     } catch (e) {
       console.error('Failed to save uploaded asset:', e)
     }
   }
 
-  const formatSize = (bytes: number) => {
+  const formatSize = (bytes: number): string => {
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
   }
 
-  const formatDate = (timestamp: number) => {
+  const formatDate = (timestamp: number): string => {
     return new Date(timestamp).toLocaleDateString(undefined, {
       month: 'short',
       day: 'numeric',
@@ -161,7 +202,7 @@ export function AssetPickerModal({
             </div>
 
             <div className="flex items-center gap-1 ml-auto">
-              {['all', 'image', 'audio', 'video'].map((type) => (
+              {visibleTypeFilters.map((type) => (
                 <button
                   key={type}
                   onClick={() => setTypeFilter(type)}
@@ -176,7 +217,10 @@ export function AssetPickerModal({
             </div>
 
             <div className="w-[140px]">
-              <Select value={sortBy} onValueChange={(val: any) => setSortBy(val)}>
+              <Select
+                value={sortBy}
+                onValueChange={(val) => setSortBy(val as 'recent' | 'used' | 'oldest')}
+              >
                 <SelectTrigger className="bg-black/20 border-white/10 text-white">
                   <SelectValue placeholder="Sort" />
                 </SelectTrigger>
@@ -200,29 +244,33 @@ export function AssetPickerModal({
                 <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
                   {loading ? (
                     <div className="flex h-full items-center justify-center text-text-muted">Loading assets...</div>
-                  ) : assets.length === 0 ? (
+                  ) : visibleAssets.length === 0 ? (
                     <div className="flex h-full items-center justify-center text-text-muted text-sm">No assets found</div>
                   ) : (
                     <div className="grid grid-cols-2 gap-2">
-                      {assets.map((asset, i) => (
+                      {visibleAssets.map((asset, i) => {
+                        const isSelected = selectedIds.has(asset.id)
+                        const limitReached =
+                          !isSelected && Boolean(maxSelection && visibleSelectedAssets.length >= maxSelection)
+
+                        return (
                         <motion.div
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: i * 0.05 }}
                           key={asset.id}
-                          onClick={(e) => {
-                            if (e.ctrlKey || e.metaKey) {
-                              toggleSelect(asset.id, true)
-                            } else {
-                              toggleSelect(asset.id, false)
-                              setPreview(asset)
-                            }
+                          title={limitReached ? 'Maximum images selected' : undefined}
+                          onClick={() => {
+                            if (limitReached) return
+                            toggleSelect(asset.id, maxSelection !== 1, maxSelection)
+                            setPreview(asset)
                           }}
                           className={cn(
                             "group relative aspect-square cursor-pointer overflow-hidden rounded-xl border-2 transition-all",
-                            selectedIds.has(asset.id)
+                            isSelected
                               ? "border-primary"
-                              : previewAsset?.id === asset.id ? "border-white/30" : "border-transparent hover:border-white/10"
+                              : previewAsset?.id === asset.id ? "border-white/30" : "border-transparent hover:border-white/10",
+                            limitReached && "cursor-not-allowed opacity-55"
                           )}
                         >
                           {asset.type === 'image' || asset.thumbnail_path ? (
@@ -239,7 +287,7 @@ export function AssetPickerModal({
                             </div>
                           )}
 
-                          {selectedIds.has(asset.id) && (
+                          {isSelected && (
                             <div className="absolute inset-0 bg-primary/20">
                               <div className="absolute top-2 right-2 rounded-full bg-primary p-0.5 text-white shadow-sm">
                                 <Check className="h-3 w-3" />
@@ -251,7 +299,8 @@ export function AssetPickerModal({
                             <p className="truncate text-xs text-white/90 font-medium">{asset.filename}</p>
                           </div>
                         </motion.div>
-                      ))}
+                        )
+                      })}
                     </div>
                   )}
                 </div>
@@ -323,14 +372,16 @@ export function AssetPickerModal({
 
               <div className="flex items-center gap-4">
                 <span className="text-sm text-text-muted">
-                  {selectedIds.size} selected
+                  {maxSelection
+                    ? `${visibleSelectedAssets.length} of ${maxSelection} selected`
+                    : `${visibleSelectedAssets.length} selected`}
                 </span>
                 <button
-                  onClick={() => onSelect(getSelectedAssets())}
-                  disabled={selectedIds.size === 0}
+                  onClick={() => onSelect(visibleSelectedAssets)}
+                  disabled={visibleSelectedAssets.length === 0}
                   className="flex items-center gap-2 rounded-lg bg-white px-6 py-2 text-sm font-medium text-black transition-all hover:bg-white/90 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Attach {selectedIds.size > 0 && `(${selectedIds.size})`}
+                  Attach {visibleSelectedAssets.length > 0 && `(${visibleSelectedAssets.length})`}
                 </button>
               </div>
             </div>

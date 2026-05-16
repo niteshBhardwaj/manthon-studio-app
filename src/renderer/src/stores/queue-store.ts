@@ -6,6 +6,7 @@ import type {
   QueueJobProgressPayload,
   QueueState
 } from '../../../main/queue/types'
+import { useAppStore } from './app-store'
 
 interface QueueStoreState {
   jobs: QueueJob[]
@@ -120,8 +121,17 @@ export const useQueueStore = create<QueueStoreState>((set, get) => ({
 
   cancelJob: async (id) => {
     if (!window.manthan) return
-    await window.manthan.cancelQueueJob(id)
-    await get().loadQueue()
+    try {
+      await window.manthan.cancelQueueJob(id)
+      await get().loadQueue()
+    } catch (error) {
+      useAppStore.getState().addToast({
+        title: 'Cancel failed',
+        message: error instanceof Error ? error.message : String(error),
+        tone: 'error'
+      })
+      throw error
+    }
   },
 
   retryJob: async (id) => {

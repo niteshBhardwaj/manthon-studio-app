@@ -70,9 +70,8 @@ export function PromptInput({
     setSelectedModel,
     setStartFrame,
     setEndFrame,
-    addReferenceImage,
+    addImageToPrompt,
     removeReferenceImage,
-    clearReferenceImages,
     resetPromptAfterSubmit,
     addJob
   } = useGenerationStore()
@@ -115,6 +114,16 @@ export function PromptInput({
         : [],
     [activeModeDescriptor, selectedModelDescriptor]
   )
+  const submitShortcutHint = useMemo(
+    () => (navigator.platform.toLowerCase().includes('mac') ? '⌘+Enter' : 'Ctrl+Enter'),
+    []
+  )
+  const attachmentSelectionLimit = useMemo(() => {
+    if (contentType === 'video' && activeMode === 'frames') return 2
+    if (activeMode === 'ingredients') return 3
+    if (contentType === 'image') return selectedModelDescriptor?.maxImages ?? 1
+    return 1
+  }, [activeMode, contentType, selectedModelDescriptor?.maxImages])
 
   // ── Effects ────────────────────────────────────────────
 
@@ -152,25 +161,54 @@ export function PromptInput({
     if (!window.manthan) return
     setIsAssetPickerOpen(false)
 
+    const inputs: BinaryInput[] = []
     for (const asset of assets) {
       try {
         const base64Data = await window.manthan.readAsset(asset.id)
         if (!base64Data) continue
 
-        const input: BinaryInput = { data: base64Data, mimeType: asset.mime_type }
-
-        if (assetPickerTarget === 'start') {
-          setStartFrame(input)
-        } else if (assetPickerTarget === 'end') {
-          setEndFrame(input)
-        } else {
-          addReferenceImage(input)
-        }
+        inputs.push({ data: base64Data, mimeType: asset.mime_type })
       } catch (error) {
         console.error('Failed to read asset:', error)
       }
     }
-  }, [assetPickerTarget, addReferenceImage, setEndFrame, setStartFrame])
+
+    if (inputs.length === 0) return
+
+    if (contentType === 'video' && activeMode === 'frames') {
+      let nextStart = startFrame
+      let nextEnd = endFrame
+
+      for (const input of inputs.slice(0, 2)) {
+        if (assetPickerTarget === 'end' && !nextEnd) {
+          nextEnd = input
+        } else if (!nextStart) {
+          nextStart = input
+        } else if (!nextEnd) {
+          nextEnd = input
+        }
+      }
+
+      setStartFrame(nextStart)
+      setEndFrame(nextEnd)
+      return
+    }
+
+    for (const input of inputs) {
+      const slot = addImageToPrompt(input)
+      if (!slot && assetPickerTarget !== 'reference') break
+      if (!slot && assetPickerTarget === 'reference') break
+    }
+  }, [
+    activeMode,
+    addImageToPrompt,
+    assetPickerTarget,
+    contentType,
+    endFrame,
+    setEndFrame,
+    setStartFrame,
+    startFrame
+  ])
 
   const handlePrimaryAttachment = useCallback(() => {
     if (contentType === 'image') {
@@ -278,10 +316,28 @@ export function PromptInput({
     setIsConfigOpen(false)
   })
 
+  useEffect(() => {
+    if (!isConfigOpen) return
+
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setIsConfigOpen(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isConfigOpen])
+
   // ── Render ─────────────────────────────────────────────
 
   return (
-    <MorphingDialog isOpen={isAssetPickerOpen} setIsOpen={setIsAssetPickerOpen}>
+    <MorphingDialog
+      isOpen={isAssetPickerOpen}
+      setIsOpen={setIsAssetPickerOpen}
+      transition={{ duration: 0.14, ease: 'easeOut' }}
+    >
       <motion.div
         className={cn(
           'w-full max-w-3xl px-4',
@@ -311,7 +367,6 @@ export function PromptInput({
                     onStartClear={() => setStartFrame(null)}
                     onEndClear={() => setEndFrame(null)}
                     onReferenceClear={removeReferenceImage}
-                    onClearReferences={clearReferenceImages}
                   />
                 </div>
               ) : null}
@@ -327,7 +382,10 @@ export function PromptInput({
                   onFocus={() => setIsFocused(true)}
                   onBlur={() => setIsFocused(false)}
                   onKeyDown={(event) => {
-                    if (event.key === 'Enter' && !event.shiftKey) {
+                    if (
+                      event.key === 'Enter' &&
+                      ((event.metaKey || event.ctrlKey) || !event.shiftKey)
+                    ) {
                       event.preventDefault()
                       void handleGenerate()
                     }
@@ -467,7 +525,6 @@ export function PromptInput({
                       }}
                     >
                       {getModelsByContentType('video', enabledModelIds)
-                        .filter((m) => m.supportsVideoExtension)
                         .map((model) => (
                           <option key={model.id} value={model.id} className="bg-bg-primary text-text-primary">
                             {model.name}
@@ -478,7 +535,11 @@ export function PromptInput({
                 ) : null}
               </div>
               
-              <button
+                <span className="hidden text-[10px] font-medium text-text-muted sm:inline">
+                  {submitShortcutHint}
+                </span>
+
+                <button
                   onClick={() => void handleGenerate()}
                   disabled={!effectivePrompt.trim() || isGenerating || !selectedModelDescriptor}
                   className={cn(
@@ -486,7 +547,8 @@ export function PromptInput({
                     effectivePrompt.trim() && selectedModelDescriptor
                       ? 'bg-white text-black shadow-[0_4px_16px_rgba(0,0,0,0.35)]'
                       : 'bg-bg-elevated text-text-muted',
-                    (!prompt.trim() || isGenerating || !selectedModelDescriptor) && 'cursor-not-allowed'
+                    (!effectivePrompt.trim() || isGenerating || !selectedModelDescriptor) &&
+                      'cursor-not-allowed'
                   )}
                   type="button"
                 >
@@ -516,6 +578,8 @@ export function PromptInput({
           onClose={() => setIsAssetPickerOpen(false)}
           onSelect={handleAssetSelect}
           currentContentType={contentType}
+          maxSelection={attachmentSelectionLimit}
+          acceptedTypes={['image']}
         />
       </motion.div>
     </MorphingDialog>

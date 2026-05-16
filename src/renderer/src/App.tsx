@@ -2,8 +2,9 @@
 // Manthan Studio - App Root
 // ============================================================
 
-import { type JSX, useEffect } from 'react'
+import { type JSX, useEffect, useState } from 'react'
 import { AppShell } from './components/layout/AppShell'
+import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal'
 import { useProviderStore } from './stores/provider-store'
 import { useGenerationStore } from './stores/generation-store'
 import { useModelStore } from './stores/model-store'
@@ -59,6 +60,7 @@ function App(): JSX.Element {
   const { loadEnabledModels } = useModelStore()
   const { initialize: initializeQueue } = useQueueStore()
   const { addToast, setHistoryHasUpdates, setPlayCompletionSound, setIsDev } = useAppStore()
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
 
   useEffect(() => {
     void Promise.all([fetchProviders(), loadEnabledModels(), initializeQueue()])
@@ -203,10 +205,30 @@ function App(): JSX.Element {
     loadEnabledModels,
     setHistoryHasUpdates,
     setPlayCompletionSound,
+    setIsDev,
     updateJob
   ])
 
-  return <AppShell />
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      const target = event.target as HTMLElement | null
+      if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return
+      if (event.key === '?') {
+        event.preventDefault()
+        setShortcutsOpen(true)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
+  return (
+    <>
+      <AppShell />
+      <KeyboardShortcutsModal isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+    </>
+  )
 }
 
 export default App

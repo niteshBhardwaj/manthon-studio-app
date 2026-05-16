@@ -242,4 +242,8 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+
+  .animate-shimmer {
+    animation: shimmer 2s infinite;
+  }
 }

@@ -91,6 +91,7 @@ export function Dashboard(): JSX.Element {
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
   const [openItemId, setOpenItemId] = useState<string | null>(null)
   const [dragActive, setDragActive] = useState(false)
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [now, setNow] = useState(() => Date.now())
   const prevCompletedQueueIdsRef = useRef<Set<string>>(new Set())
 
@@ -313,40 +314,51 @@ export function Dashboard(): JSX.Element {
       ) : null}
 
       {projectHasContent ? (
-        <section className="space-y-2 rounded-2xl border border-white/8 bg-[linear-gradient(180deg,rgba(14,20,31,0.96),rgba(10,15,24,0.9))] p-3 shadow-[0_18px_50px_rgba(0,0,0,0.18)]">
+        <section className="flex flex-col gap-1.5 rounded-xl border border-white/8 bg-[linear-gradient(180deg,rgba(14,20,31,0.96),rgba(10,15,24,0.9))] p-2 shadow-[0_8px_30px_rgba(0,0,0,0.12)]">
           <StatsStrip
             stats={stats}
             latestGeneratedAt={latestGeneration?.createdAt ?? null}
             filteredCount={filteredCount}
             totalCount={totalCount}
+            onToggleFilters={() => setFiltersOpen(!filtersOpen)}
+            filtersOpen={filtersOpen}
+            hasActiveFilters={
+              sourceFilter !== 'all' ||
+              typeFilter !== 'all' ||
+              statusFilter !== 'all' ||
+              starredOnly ||
+              searchQuery !== ''
+            }
           />
 
-          <DashboardFilterBar
-            sourceFilter={sourceFilter}
-            typeFilter={typeFilter}
-            statusFilter={statusFilter}
-            starredOnly={starredOnly}
-            sortBy={sortBy}
-            searchQuery={searchQuery}
-            onSourceFilterChange={setSourceFilter}
-            onTypeFilterChange={setTypeFilter}
-            onStatusFilterChange={setStatusFilter}
-            onStarredOnlyChange={setStarredOnly}
-            onSortChange={setSortBy}
-            onSearchChange={setSearchQuery}
-            onImport={() => void handleImport()}
-          />
+          {filtersOpen ? (
+            <DashboardFilterBar
+              sourceFilter={sourceFilter}
+              typeFilter={typeFilter}
+              statusFilter={statusFilter}
+              starredOnly={starredOnly}
+              sortBy={sortBy}
+              searchQuery={searchQuery}
+              onSourceFilterChange={setSourceFilter}
+              onTypeFilterChange={setTypeFilter}
+              onStatusFilterChange={setStatusFilter}
+              onStarredOnlyChange={setStarredOnly}
+              onSortChange={setSortBy}
+              onSearchChange={setSearchQuery}
+              onImport={() => void handleImport()}
+            />
+          ) : null}
         </section>
       ) : null}
 
       {loading ? (
-        <div className="flex min-h-[18rem] items-center justify-center">
+        <div className="flex min-h-72 items-center justify-center">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
         </div>
       ) : !projectHasContent ? (
         <WelcomeState onImport={() => void handleImport()} />
       ) : !hasAnyContent ? (
-        <div className="flex min-h-[18rem] flex-col items-center justify-center gap-2 text-white/50">
+        <div className="flex min-h-72 flex-col items-center justify-center gap-2 text-white/50">
           <p>No media found matching your search or filters.</p>
           <button
             type="button"
@@ -375,6 +387,9 @@ export function Dashboard(): JSX.Element {
               onDelete={(id) => {
                 const item = activeItems.find((entry) => entry.id === id)
                 if (item) void handleDelete(item)
+              }}
+              onCancel={(id) => {
+                void cancelQueueJob(id)
               }}
               onRerun={handleRerun}
               onDownload={handleDownload}

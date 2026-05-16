@@ -33,6 +33,7 @@ export function MediaTimeline({
   onSelect,
   onToggleStar,
   onDelete,
+  onCancel,
   onRerun,
   onDownload,
   onOpen,
@@ -47,6 +48,7 @@ export function MediaTimeline({
   onSelect: (id: string) => void
   onToggleStar: (id: string) => void
   onDelete: (id: string) => void
+  onCancel?: (id: string) => void
   onRerun: (item: DashboardFeedItem) => void
   onDownload: (item: DashboardFeedItem) => void
   onOpen: (id: string) => void
@@ -101,7 +103,7 @@ export function MediaTimeline({
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
+            className="grid grid-cols-1 gap-4 md:grid-cols-2"
           >
             {groupItems.map((item) => (
               <DashboardCard
@@ -114,6 +116,7 @@ export function MediaTimeline({
                 onSelect={() => onSelect(item.id)}
                 onToggleStar={() => onToggleStar(item.id)}
                 onDelete={() => onDelete(item.id)}
+                onCancel={onCancel ? () => onCancel(item.id) : undefined}
                 onRerun={() => onRerun(item)}
                 onDownload={() => onDownload(item)}
               />

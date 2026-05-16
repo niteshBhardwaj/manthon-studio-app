@@ -89,6 +89,7 @@ export function VideoLightbox({
   const [localPrompt, setLocalPrompt] = useState('')
   const [localModel, setLocalModel] = useState(job.model)
   const [resolvedVideoSrc, setResolvedVideoSrc] = useState('')
+  const [resolvingVideoSrc, setResolvingVideoSrc] = useState(false)
   const [timelineFrames, setTimelineFrames] = useState<
     Array<{ timeSeconds: number; base64: string }>
   >([])
@@ -112,12 +113,17 @@ export function VideoLightbox({
     if (!isOpen) return
     let cancelled = false
 
+    setResolvingVideoSrc(true)
+    setResolvedVideoSrc('')
     void resolveJobSrc(displayJob)
       .then((src) => {
         if (!cancelled) setResolvedVideoSrc(src)
       })
       .catch(() => {
         if (!cancelled) setResolvedVideoSrc('')
+      })
+      .finally(() => {
+        if (!cancelled) setResolvingVideoSrc(false)
       })
 
     return () => {
@@ -164,9 +170,12 @@ export function VideoLightbox({
   // Determine if the video supports true Veo extension
   const isVeoExtendable = useMemo(() => {
     if (displayJob.status !== 'completed') return false
-    if (displayJob.provider !== 'google-veo') return false
     const modelDescriptor = getModelById(displayJob.model)
-    return modelDescriptor?.supportsVideoExtension === true
+    const providerLooksLikeVeo = displayJob.provider.toLowerCase().includes('veo')
+    const modelLooksLikeVeo = displayJob.model.toLowerCase().includes('veo')
+    if (!providerLooksLikeVeo && !modelLooksLikeVeo) return false
+    if (modelDescriptor?.supportsVideoExtension === undefined) return modelLooksLikeVeo
+    return modelDescriptor.supportsVideoExtension === true
   }, [displayJob.model, displayJob.provider, displayJob.status])
 
   useEffect(() => {
@@ -178,7 +187,9 @@ export function VideoLightbox({
       setLocalModel(job.model)
       setTimelineFrames([])
       setTimelineLoading(false)
-      setTimelineOpen(window.localStorage.getItem(`manthan:video-frames:${job.id}`) === 'open')
+      setTimelineOpen(false)
+      setSeekTo(null)
+      setSubmitting(false)
     }, 0)
 
     // Fetch siblings if this job is part of a group
@@ -230,6 +241,20 @@ export function VideoLightbox({
 
     return () => window.clearTimeout(resetTimer)
   }, [isOpen, job])
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onClose()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, onClose])
 
   const handleDownload = async (): Promise<void> => {
     if (!displayJob.result || !window.manthan) return
@@ -311,8 +336,57 @@ export function VideoLightbox({
     }
   }
 
+  const handleContinueFromLastFrame = async (): Promise<void> => {
+    if (!localPrompt.trim() || !resolvedVideoSrc) return
+
+    setSubmitting(true)
+    try {
+      const frameTime = Math.max(0, getJobDurationSeconds(displayJob) - 0.05)
+      const frameBase64 = await extractFrameAtTime(resolvedVideoSrc, frameTime)
+      const createdJobs = await enqueueGeneration({
+        groupId: displayJob.groupId || displayJob.id,
+        prompt: localPrompt.trim(),
+        negativePrompt: '',
+        selectedModel: localModel,
+        capabilityValues: {
+          ...displayJob.config.capabilityValues,
+          batch_count: 1
+        },
+        startFrame: {
+          data: frameBase64,
+          mimeType: 'image/webp',
+          metadata: {
+            extractedFromVideo: displayJob.id,
+            timeSeconds: frameTime
+          }
+        },
+        endFrame: null,
+        videoInput: null,
+        referenceImages: [],
+        batchCount: 1,
+        activeMode: 'frames',
+        activeProjectId
+      })
+
+      if (createdJobs[0]) {
+        useGenerationStore.getState().addJob(createdJobs[0])
+        setDisplayJobId(createdJobs[0].id)
+        setLocalPrompt('')
+      }
+    } catch (error) {
+      addToast({
+        title: 'Continuation failed',
+        message: error instanceof Error ? error.message : String(error),
+        tone: 'error'
+      })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   const handleExtensionSubmit = async (): Promise<void> => {
     if (isVeoExtendable) await handleExtendVideo()
+    else await handleContinueFromLastFrame()
   }
 
   const handleSeekToFrame = (timeSeconds: number): void => {
@@ -380,11 +454,7 @@ export function VideoLightbox({
   }
 
   const handleToggleTimeline = (): void => {
-    setTimelineOpen((open) => {
-      const next = !open
-      window.localStorage.setItem(`manthan:video-frames:${displayJob.id}`, next ? 'open' : 'closed')
-      return next
-    })
+    setTimelineOpen((open) => !open)
   }
 
   const handleAddJobToDashboard = async (groupJob: GenerationJob): Promise<void> => {
@@ -440,7 +510,7 @@ export function VideoLightbox({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/75 p-6 backdrop-blur-md"
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/90 p-6"
         >
           <motion.div
             layoutId={layoutId}
@@ -452,21 +522,31 @@ export function VideoLightbox({
             <button
               type="button"
               onClick={handleClose}
-              className="absolute right-5 top-5 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/35 text-white/80 backdrop-blur-md transition-colors hover:bg-black/50 hover:text-white"
+              className="absolute right-5 top-5 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white/80 transition-colors hover:bg-black/75 hover:text-white"
             >
               <X className="h-4 w-4" />
+              <span className="absolute -bottom-6 rounded bg-black/70 px-1.5 py-0.5 text-[9px] font-medium text-white/70">
+                Esc
+              </span>
             </button>
 
             <div className="grid h-full overflow-hidden lg:grid-cols-[minmax(0,1fr)_18rem]">
               <div className="flex flex-col gap-5 overflow-y-auto p-6">
-                <VideoPlayer
-                  src={resolvedVideoSrc}
-                  assetId={displayJob.result?.assetId}
-                  mimeType={displayJob.result?.mimeType}
-                  autoPlay
-                  seekTo={seekTo}
-                  className="w-full rounded-2xl overflow-hidden aspect-video shadow-2xl bg-black"
-                />
+                {resolvingVideoSrc ? (
+                  <div className="flex aspect-video w-full items-center justify-center rounded-2xl bg-black shadow-2xl">
+                    <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
+                  </div>
+                ) : (
+                  <VideoPlayer
+                    key={resolvedVideoSrc || displayJob.id}
+                    src={resolvedVideoSrc}
+                    assetId={displayJob.result?.assetId}
+                    mimeType={displayJob.result?.mimeType}
+                    autoPlay
+                    seekTo={seekTo}
+                    className="w-full rounded-2xl overflow-hidden aspect-video shadow-2xl bg-black [will-change:transform]"
+                  />
+                )}
 
                 {isCompleted ? (
                   <div className="w-full overflow-hidden">
@@ -500,7 +580,7 @@ export function VideoLightbox({
                             {timelineFrames.map((frame) => (
                               <div
                                 key={`${displayJob.id}-${frame.timeSeconds}`}
-                                className="group/frame w-[6.75rem] min-w-[6.75rem] overflow-hidden rounded-md border border-white/10 bg-black/35"
+                                className="group/frame w-[13.5rem] min-w-[13.5rem] overflow-hidden rounded-md border border-white/10 bg-black/35"
                               >
                                 <button
                                   type="button"
@@ -555,7 +635,7 @@ export function VideoLightbox({
                               </div>
                             ))}
                             {timelineLoading && timelineFrames.length === 0 ? (
-                              <div className="flex aspect-video w-[6.75rem] min-w-[6.75rem] items-center justify-center rounded-md border border-white/10 bg-white/5">
+                              <div className="flex aspect-video w-[13.5rem] min-w-[13.5rem] items-center justify-center rounded-md border border-white/10 bg-white/5">
                                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
                               </div>
                             ) : null}
@@ -571,11 +651,11 @@ export function VideoLightbox({
                   </div>
                 ) : null}
 
-                {isVeoExtendable ? (
+                {isCompleted ? (
                   <div className="flex flex-col gap-3 max-w-3xl mx-auto w-full">
                     <div className="flex bg-white/5 rounded-xl p-1 gap-1 self-start mb-0.5">
                       <span className="px-4 py-1.5 rounded-lg bg-white text-xs font-medium text-black shadow-sm">
-                        Extend Video
+                        {isVeoExtendable ? 'Extend Video' : 'Continue from Last Frame'}
                       </span>
                     </div>
                     <PromptInput
@@ -584,7 +664,11 @@ export function VideoLightbox({
                       onChange={setLocalPrompt}
                       selectedModel={localModel}
                       onModelChange={setLocalModel}
-                      onSubmit={isCompleted && !submitting ? handleExtensionSubmit : undefined}
+                      onSubmit={
+                        isCompleted && !submitting && !resolvingVideoSrc
+                          ? handleExtensionSubmit
+                          : undefined
+                      }
                     />
                   </div>
                 ) : null}

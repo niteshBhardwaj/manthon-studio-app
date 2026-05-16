@@ -178,7 +178,16 @@ function MorphingDialogContent({ children, className, style }: MorphingDialogCon
     }
   }, [isOpen, triggerRef])
 
-  useClickOutside(containerRef, () => {
+  useClickOutside(containerRef, (event) => {
+    const target = event.target as Element | null
+    if (
+      target?.closest(
+        '[data-radix-popper-content-wrapper], [data-radix-select-content], [role="listbox"]'
+      )
+    ) {
+      return
+    }
+
     if (isOpen) {
       setIsOpen(false)
     }
@@ -223,7 +232,7 @@ function MorphingDialogContainer({ children }: MorphingDialogContainerProps) {
         <>
           <motion.div
             key={`backdrop-${uniqueId}`}
-            className="fixed inset-0 h-full w-full bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 h-full w-full bg-black/80"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}

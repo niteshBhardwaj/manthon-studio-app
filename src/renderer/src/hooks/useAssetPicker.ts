@@ -15,7 +15,10 @@ export interface UseAssetPickerReturn {
   setTypeFilter: (type: string) => void
   setSearchQuery: (q: string) => void
   setSortBy: (sort: 'recent' | 'used' | 'oldest') => void
-  toggleSelect: (id: string, multi?: boolean) => void
+  toggleSelect: (id: string, multi?: boolean, maxSelection?: number) => void
+  selectAssets: (ids: string[], maxSelection?: number) => void
+  clearSelection: () => void
+  selectionLimitReached: (maxSelection?: number) => boolean
   setPreview: (asset: AssetInfo | null) => void
   loadAssets: () => Promise<void>
   getSelectedAssets: () => AssetInfo[]
@@ -37,12 +40,12 @@ export function useAssetPicker(): UseAssetPickerReturn {
     if (!window.manthan) return
     setLoading(true)
     try {
-      const options: any = {}
+      const options: { projectId?: string; type?: 'video' | 'image' | 'audio' } = {}
       if (projectFilter !== 'all') {
         options.projectId = projectFilter
       }
       if (typeFilter !== 'all') {
-        options.type = typeFilter as any
+        options.type = typeFilter as 'video' | 'image' | 'audio'
       }
       
       const { assets: fetchedAssets } = await window.manthan.listAssets(options)
@@ -58,17 +61,39 @@ export function useAssetPicker(): UseAssetPickerReturn {
     void loadAssets()
   }, [loadAssets])
 
-  const toggleSelect = useCallback((id: string, multi: boolean = false) => {
+  const toggleSelect = useCallback((id: string, multi: boolean = false, maxSelection?: number) => {
     setSelectedIds((prev) => {
       const next = new Set(multi ? prev : [])
       if (next.has(id)) {
         next.delete(id)
       } else {
+        if (maxSelection && next.size >= maxSelection) return prev
         next.add(id)
       }
       return next
     })
   }, [])
+
+  const selectAssets = useCallback((ids: string[], maxSelection?: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      for (const id of ids) {
+        if (maxSelection && next.size >= maxSelection) break
+        next.add(id)
+      }
+      return next
+    })
+  }, [])
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set())
+    setPreviewAsset(null)
+  }, [])
+
+  const selectionLimitReached = useCallback(
+    (maxSelection?: number) => Boolean(maxSelection && selectedIds.size >= maxSelection),
+    [selectedIds.size]
+  )
 
   const getSelectedAssets = useCallback(() => {
     return assets.filter(a => selectedIds.has(a.id))
@@ -117,6 +142,9 @@ export function useAssetPicker(): UseAssetPickerReturn {
     setSearchQuery,
     setSortBy,
     toggleSelect,
+    selectAssets,
+    clearSelection,
+    selectionLimitReached,
     setPreview: setPreviewAsset,
     loadAssets,
     getSelectedAssets,
